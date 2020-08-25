@@ -2,10 +2,39 @@
 
 #include <iostream>
 #include <fstream>
+#include <chrono>
+
+template <class Fn>
+double ProcessTime(Fn fn) {
+  auto start = std::chrono::high_resolution_clock::now();
+  fn();
+  auto now = std::chrono::high_resolution_clock::now();
+  return (double) std::chrono::duration_cast<std::chrono::milliseconds>(now-start).count();
+}
+
+template <class Da>
+void Benchmark(const std::vector<std::string>& keyset) {
+  Da plain_da;
+  auto construction_time = ProcessTime([&] {
+    plain_da.Build(keyset);
+  });
+  std::cout << "construction_time: \t" << construction_time << std::endl;
+
+  auto lookup_time = ProcessTime([&] {
+    for (auto& key : keyset) {
+      bool ok = plain_da.contains(key);
+      if (!ok) {
+        std::cout << "ERROR! " << key << "\t is not contained!" << std::endl;
+        return;
+      }
+    }
+  });
+  std::cout << "lookup_time: \t" << lookup_time/1000 << " sec" << std::endl;
+}
 
 int main(int argc, char* argv[]) {
-  if (argc < 1) {
-    std::cerr << "Usage: " << argv[0] << " [keyset]" << std::endl;
+  if (argc < 2) {
+    std::cout << "Usage: " << argv[0] << " [keyset]" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -20,13 +49,12 @@ int main(int argc, char* argv[]) {
     keyset.push_back(key);
   }
 
-  plain_da::PlainDa<0> plain_da(keyset);
-  for (auto& key : keyset) {
-    bool ok = plain_da.contains(key);
-    if (!ok) {
-      std::cerr << key << "\t is not contained!" << std::endl;
-    }
-  }
+  std::cout << "- Brute force" << std::endl;
+  Benchmark<plain_da::PlainDa<0>>(keyset);
+  std::cout << "- Empty-Link method" << std::endl;
+  Benchmark<plain_da::PlainDa<1>>(keyset);
+  std::cout << "- Bit-parallelism" << std::endl;
+  Benchmark<plain_da::PlainDa<2>>(keyset);
 
   return 0;
 }
