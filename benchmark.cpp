@@ -9,7 +9,7 @@ double ProcessTime(Fn fn) {
   auto start = std::chrono::high_resolution_clock::now();
   fn();
   auto now = std::chrono::high_resolution_clock::now();
-  return (double) std::chrono::duration_cast<std::chrono::milliseconds>(now-start).count();
+  return (double) std::chrono::duration_cast<std::chrono::microseconds>(now-start).count();
 }
 
 template <class Da>
@@ -18,7 +18,7 @@ void Benchmark(const std::vector<std::string>& keyset) {
   auto construction_time = ProcessTime([&] {
     plain_da.Build(keyset);
   });
-  std::cout << "construction_time: \t" << construction_time << std::endl;
+  std::cout << "construction_time: \t" << construction_time/1000000 << " s" << std::endl;
 
   auto lookup_time = ProcessTime([&] {
     for (auto& key : keyset) {
@@ -29,7 +29,7 @@ void Benchmark(const std::vector<std::string>& keyset) {
       }
     }
   });
-  std::cout << "lookup_time: \t" << lookup_time/1000 << " sec" << std::endl;
+  std::cout << "lookup_time: \t" << lookup_time/keyset.size() << " µs/key" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -49,8 +49,6 @@ int main(int argc, char* argv[]) {
     keyset.push_back(key);
   }
 
-  std::cout << "- Brute force" << std::endl;
-  Benchmark<plain_da::PlainDa<0>>(keyset);
   std::cout << "- Empty-Link method" << std::endl;
   Benchmark<plain_da::PlainDa<1>>(keyset);
   std::cout << "- Bit-parallelism" << std::endl;

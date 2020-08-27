@@ -6,7 +6,7 @@
 
 namespace plain_da {
 
-class BitVector : std::vector<uint64_t> {
+class BitVector : private std::vector<uint64_t> {
   using _base = std::vector<uint64_t>;
 
  private:
@@ -26,7 +26,7 @@ class BitVector : std::vector<uint64_t> {
   }
 
   uint64_t word(size_t wi) const {
-    return (wi < (size()-1)/64+1) ? *(_base::data() + wi) : 0ull;
+    return wi < _base::size() ? _base::operator[](wi) : 0ull;
   }
 
   uint64_t bits64(size_t offset) const {
@@ -48,7 +48,7 @@ class BitVector : std::vector<uint64_t> {
     uint64_t mask_;
 
     friend class BitVector;
-    reference(pointer ptr, unsigned mask) : ptr_(ptr), mask_(mask) {}
+    reference(pointer ptr, uint64_t mask) : ptr_(ptr), mask_(mask) {}
 
    public:
     operator bool() const {
@@ -71,7 +71,7 @@ class BitVector : std::vector<uint64_t> {
     uint64_t mask_;
 
     friend class BitVector;
-    const_reference(const_pointer ptr, unsigned mask) : ptr_(ptr), mask_(mask) {}
+    const_reference(const_pointer ptr, uint64_t mask) : ptr_(ptr), mask_(mask) {}
 
    public:
     operator bool() const {
