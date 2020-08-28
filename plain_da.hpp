@@ -7,6 +7,7 @@
 #include <cassert>
 #include <iostream>
 #include <bitset>
+#include <chrono>
 
 #include <bo.hpp>
 
@@ -61,6 +62,8 @@ class PlainDa {
   std::vector<DaUnit> bc_;
   BitVector exists_bits_;
   index_type empty_head_ = kInvalidIndex;
+  size_t cnt_skip_ = 0;
+  uint64_t time_fb_ = 0;
 
   size_t size() const { return bc_.size(); }
 
@@ -71,7 +74,7 @@ class PlainDa {
   void CheckExpand(index_type pos);
 
   template <typename Container>
-  index_type FindBase(const Container& children) const;
+  index_type FindBase(const Container& children);
 
 };
 
@@ -109,7 +112,11 @@ void PlainDa<ConstructionType>::Build(const std::vector<std::string>& keyset) {
     its.push_back(end);
 
     assert(!children.empty());
+    auto start_t = std::chrono::high_resolution_clock::now();
     auto base = FindBase(children);
+    auto end_t = std::chrono::high_resolution_clock::now();
+    time_fb_ += std::chrono::duration_cast<std::chrono::microseconds>(end_t-start_t).count();
+
     bc_[da_index].base = base;
     CheckExpand(base + children.back());
     for (uint8_t c : children) {
@@ -129,6 +136,9 @@ void PlainDa<ConstructionType>::Build(const std::vector<std::string>& keyset) {
   SetEnabled(root_index);
   bc_[root_index].check = std::numeric_limits<index_type>::max();
   dfs(dfs, keyset.cbegin(), keyset.cend(), 0, root_index);
+
+  std::cout << "\tCount roops: " << cnt_skip_ << std::endl;
+  std::cout << "\tFindBase time: " << std::fixed << (double)time_fb_/1000000 << " ￿s" << std::endl;
 }
 
 template <int ConstructionType>
@@ -182,7 +192,7 @@ void PlainDa<ConstructionType>::CheckExpand(index_type pos) {
 template <int ConstructionType>
 template <typename Container>
 typename PlainDa<ConstructionType>::index_type
-PlainDa<ConstructionType>::FindBase(const Container& children) const {
+PlainDa<ConstructionType>::FindBase(const Container& children) {
   assert(!children.empty());
   uint8_t fstc = children[0];
 
@@ -211,6 +221,7 @@ PlainDa<ConstructionType>::FindBase(const Container& children) const {
       base = bc_[base + fstc].succ() - fstc;
       if (base == base_front)
         break;
+      cnt_skip_++;
     }
     return size() - fstc;
 
@@ -248,6 +259,7 @@ PlainDa<ConstructionType>::FindBase(const Container& children) const {
         offset = next_empty_pos - fstc;
 
       }
+      cnt_skip_++;
     }
     return size() - fstc;
 
