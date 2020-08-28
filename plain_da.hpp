@@ -8,7 +8,7 @@
 #include <iostream>
 #include <bitset>
 
-#include <x86intrin.h>
+#include <bo.hpp>
 
 #include "bit_vector.hpp"
 
@@ -225,7 +225,7 @@ PlainDa<ConstructionType>::FindBase(const Container& children) const {
       }
       bits = ~bits;
       if (bits != 0ull) {
-        return offset + _tzcnt_u64(bits);
+        return offset + bo::ctz_u64(bits);
       }
 
       if constexpr (ConstructionType == 1) {
@@ -238,7 +238,7 @@ PlainDa<ConstructionType>::FindBase(const Container& children) const {
         assert(!exists_bits_[window_front]);
         uint64_t word_with_fstc = ~exists_bits_.word(window_front);
         assert(word_with_fstc != 0ull);
-        auto window_empty_tail = window_front + 63 - _lzcnt_u64(word_with_fstc);
+        auto window_empty_tail = window_front + 63 - bo::clz_u64(word_with_fstc);
         if (window_empty_tail >= size())
           break;
         auto next_empty_pos = bc_[window_empty_tail].succ();
