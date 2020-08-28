@@ -39,10 +39,9 @@ class BitVector : private std::vector<uint64_t> {
     }
   }
 
-  using pointer = uint64_t*;
-  using const_pointer = const uint64_t*;
-
   class reference {
+   public:
+    using pointer = uint64_t*;
    private:
     pointer ptr_;
     uint64_t mask_;
@@ -66,12 +65,14 @@ class BitVector : private std::vector<uint64_t> {
   };
 
   class const_reference {
+   public:
+    using pointer = const uint64_t*;
    private:
-    const_pointer ptr_;
+    pointer ptr_;
     uint64_t mask_;
 
     friend class BitVector;
-    const_reference(const_pointer ptr, uint64_t mask) : ptr_(ptr), mask_(mask) {}
+    const_reference(pointer ptr, uint64_t mask) : ptr_(ptr), mask_(mask) {}
 
    public:
     operator bool() const {
