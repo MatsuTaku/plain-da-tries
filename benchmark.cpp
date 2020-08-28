@@ -50,9 +50,9 @@ int main(int argc, char* argv[]) {
   }
 
   std::cout << "- Empty-Link method" << std::endl;
-  Benchmark<plain_da::PlainDa<1>>(keyset);
+  Benchmark<plain_da::PlainDa<0>>(keyset);
   std::cout << "- Bit-parallelism" << std::endl;
-  Benchmark<plain_da::PlainDa<2>>(keyset);
+  Benchmark<plain_da::PlainDa<1>>(keyset);
 
   return 0;
 }

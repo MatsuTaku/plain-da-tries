@@ -60,7 +60,7 @@ class PlainDa {
 
   std::vector<DaUnit> bc_;
   BitVector exists_bits_;
-  index_type empty_front_ = kInvalidIndex;
+  index_type empty_head_ = kInvalidIndex;
 
   size_t size() const { return bc_.size(); }
 
@@ -133,38 +133,34 @@ void PlainDa<ConstructionType>::Build(const std::vector<std::string>& keyset) {
 
 template <int ConstructionType>
 void PlainDa<ConstructionType>::SetDisabled(index_type pos) {
-  if (empty_front_ == kInvalidIndex) {
-    empty_front_ = pos;
+  if (empty_head_ == kInvalidIndex) {
+    empty_head_ = pos;
     bc_[pos].set_succ(pos);
     bc_[pos].set_pred(pos);
   } else {
-    auto back_pos = bc_[empty_front_].pred();
+    auto back_pos = bc_[empty_head_].pred();
     bc_[back_pos].set_succ(pos);
-    bc_[empty_front_].set_pred(pos);
-    bc_[pos].set_succ(empty_front_);
+    bc_[empty_head_].set_pred(pos);
+    bc_[pos].set_succ(empty_head_);
     bc_[pos].set_pred(back_pos);
   }
-  if constexpr (ConstructionType == 2) {
+  if constexpr (ConstructionType != 0) {
     exists_bits_[pos] = false;
-    assert(!exists_bits_[pos]);
   }
 }
 
 template <int ConstructionType>
 void PlainDa<ConstructionType>::SetEnabled(index_type pos) {
-  if(bc_[pos].Enabled())
-    std::cerr<<pos<<"] "<<bc_[pos].check<<std::endl;
   assert(!bc_[pos].Enabled());
   auto succ_pos = bc_[pos].succ();
-  if (pos == empty_front_) {
-    empty_front_ = (succ_pos != pos) ? succ_pos : kInvalidIndex;
+  if (pos == empty_head_) {
+    empty_head_ = (succ_pos != pos) ? succ_pos : kInvalidIndex;
   }
   auto pred_pos = bc_[pos].pred();
   bc_[pred_pos].set_succ(succ_pos);
   bc_[succ_pos].set_pred(pred_pos);
-  if constexpr (ConstructionType == 2) {
+  if constexpr (ConstructionType != 0) {
     exists_bits_[pos] = true;
-    assert(exists_bits_[pos]);
   }
 }
 
@@ -175,7 +171,7 @@ void PlainDa<ConstructionType>::CheckExpand(index_type pos) {
   if (new_size <= old_size)
     return;
   bc_.resize(new_size);
-  if constexpr (ConstructionType == 2) {
+  if constexpr (ConstructionType != 0) {
     exists_bits_.resize(new_size);
   }
   for (auto i = old_size; i < new_size; i++) {
@@ -183,60 +179,77 @@ void PlainDa<ConstructionType>::CheckExpand(index_type pos) {
   }
 }
 
-template <>
+template <int ConstructionType>
 template <typename Container>
-typename PlainDa<1>::index_type
-PlainDa<1>::FindBase(const Container& children) const {
+typename PlainDa<ConstructionType>::index_type
+PlainDa<ConstructionType>::FindBase(const Container& children) const {
   assert(!children.empty());
   uint8_t fstc = children[0];
-  if (empty_front_ != kInvalidIndex) {
-    index_type base_front = empty_front_ - fstc;
-    auto base = base_front;
-    while (base + fstc < size()) {
-      bool ok = true;
-      assert(!bc_[base + fstc].Enabled());
-      for (int i = 1; i < children.size(); i++) {
-        uint8_t c = children[i];
-        ok &= !bc_[base + c].Enabled();
-        if (!ok)
-          break;
-      }
-      if (ok) {
-        for (auto c:children) {
-          assert(!bc_[base+c].Enabled());
+
+  if constexpr (ConstructionType == 0) {
+
+    if (empty_head_ != kInvalidIndex) {
+      index_type base_front = empty_head_ - fstc;
+      auto base = base_front;
+      while (base + fstc < size()) {
+        bool ok = true;
+        assert(!bc_[base + fstc].Enabled());
+        for (int i = 1; i < children.size(); i++) {
+          uint8_t c = children[i];
+          ok &= !bc_[base + c].Enabled();
+          if (!ok)
+            break;
         }
-        return base;
-      }
-      base = bc_[base + fstc].succ() - fstc;
-      if (base == base_front)
-        break;
-    }
-  }
-  return size() - fstc;
-}
-
-
-template <>
-template <typename Container>
-typename PlainDa<2>::index_type
-PlainDa<2>::FindBase(const Container& children) const {
-  assert(!children.empty());
-  uint8_t fstc = children[0];
-  if (empty_front_ != kInvalidIndex) {
-    for (int offset = empty_front_-fstc; offset+fstc < size(); offset += 64) {
-      uint64_t bits = 0ull;
-      for (uint8_t c : children) {
-        bits |= exists_bits_.bits64(offset + c);
-        if (~bits == 0ull)
+        if (ok) {
+          return base;
+        }
+        base = bc_[base + fstc].succ() - fstc;
+        if (base == base_front)
           break;
       }
-      bits = ~bits;
-      if (bits != 0ull) {
-        return offset + _tzcnt_u64(bits);
+    }
+    return size() - fstc;
+
+  } else {
+
+    if (empty_head_ != kInvalidIndex) {
+      for (int offset = empty_head_-fstc; offset+fstc < size(); ) {
+        uint64_t bits = 0ull;
+        for (uint8_t c : children) {
+          bits |= exists_bits_.bits64(offset + c);
+          if (~bits == 0ull)
+            break;
+        }
+        bits = ~bits;
+        if (bits != 0ull) {
+          return offset + _tzcnt_u64(bits);
+        }
+
+        if constexpr (ConstructionType == 1) {
+
+          offset += 64;
+
+        } else if constexpr (ConstructionType == 2) {
+
+          auto window_front = offset + fstc;
+          assert(!exists_bits_[window_front]);
+          uint64_t word_with_fstc = ~exists_bits_.word(window_front);
+          assert(word_with_fstc != 0ull);
+          auto window_empty_tail = window_front + 63 - _lzcnt_u64(word_with_fstc);
+          if (window_empty_tail >= size())
+            break;
+          auto next_empty_pos = bc_[window_empty_tail].succ();
+          if (next_empty_pos == empty_head_)
+            break;
+          assert(next_empty_pos - window_front >= 64);
+          offset = next_empty_pos - fstc;
+
+        }
       }
     }
+    return size() - fstc;
+
   }
-  return size() - fstc;
 }
 
 }
