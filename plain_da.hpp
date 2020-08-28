@@ -201,7 +201,7 @@ PlainDa<ConstructionType>::FindBase(const Container& children) const {
       assert(!bc_[base + fstc].Enabled());
       for (int i = 1; i < children.size(); i++) {
         uint8_t c = children[i];
-        ok &= !bc_[base + c].Enabled();
+        ok &= base + c >= size() or !bc_[base + c].Enabled();
         if (!ok)
           break;
       }
