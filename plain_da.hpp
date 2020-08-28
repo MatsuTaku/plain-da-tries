@@ -186,65 +186,67 @@ PlainDa<ConstructionType>::FindBase(const Container& children) const {
   assert(!children.empty());
   uint8_t fstc = children[0];
 
+  if (empty_head_ == kInvalidIndex)
+    return size() - fstc;
+
+  if (children.size() == 1)
+    return empty_head_ - fstc;
+
   if constexpr (ConstructionType == 0) {
 
-    if (empty_head_ != kInvalidIndex) {
-      index_type base_front = empty_head_ - fstc;
-      auto base = base_front;
-      while (base + fstc < size()) {
-        bool ok = true;
-        assert(!bc_[base + fstc].Enabled());
-        for (int i = 1; i < children.size(); i++) {
-          uint8_t c = children[i];
-          ok &= !bc_[base + c].Enabled();
-          if (!ok)
-            break;
-        }
-        if (ok) {
-          return base;
-        }
-        base = bc_[base + fstc].succ() - fstc;
-        if (base == base_front)
+    index_type base_front = empty_head_ - fstc;
+    auto base = base_front;
+    while (base + fstc < size()) {
+      bool ok = true;
+      assert(!bc_[base + fstc].Enabled());
+      for (int i = 1; i < children.size(); i++) {
+        uint8_t c = children[i];
+        ok &= !bc_[base + c].Enabled();
+        if (!ok)
           break;
       }
+      if (ok) {
+        return base;
+      }
+      base = bc_[base + fstc].succ() - fstc;
+      if (base == base_front)
+        break;
     }
     return size() - fstc;
 
   } else {
 
-    if (empty_head_ != kInvalidIndex) {
-      for (int offset = empty_head_-fstc; offset+fstc < size(); ) {
-        uint64_t bits = 0ull;
-        for (uint8_t c : children) {
-          bits |= exists_bits_.bits64(offset + c);
-          if (~bits == 0ull)
-            break;
-        }
-        bits = ~bits;
-        if (bits != 0ull) {
-          return offset + _tzcnt_u64(bits);
-        }
+    for (int offset = empty_head_-fstc; offset+fstc < size(); ) {
+      uint64_t bits = 0ull;
+      for (uint8_t c : children) {
+        bits |= exists_bits_.bits64(offset + c);
+        if (~bits == 0ull)
+          break;
+      }
+      bits = ~bits;
+      if (bits != 0ull) {
+        return offset + _tzcnt_u64(bits);
+      }
 
-        if constexpr (ConstructionType == 1) {
+      if constexpr (ConstructionType == 1) {
 
-          offset += 64;
+        offset += 64;
 
-        } else if constexpr (ConstructionType == 2) {
+      } else if constexpr (ConstructionType == 2) {
 
-          auto window_front = offset + fstc;
-          assert(!exists_bits_[window_front]);
-          uint64_t word_with_fstc = ~exists_bits_.word(window_front);
-          assert(word_with_fstc != 0ull);
-          auto window_empty_tail = window_front + 63 - _lzcnt_u64(word_with_fstc);
-          if (window_empty_tail >= size())
-            break;
-          auto next_empty_pos = bc_[window_empty_tail].succ();
-          if (next_empty_pos == empty_head_)
-            break;
-          assert(next_empty_pos - window_front >= 64);
-          offset = next_empty_pos - fstc;
+        auto window_front = offset + fstc;
+        assert(!exists_bits_[window_front]);
+        uint64_t word_with_fstc = ~exists_bits_.word(window_front);
+        assert(word_with_fstc != 0ull);
+        auto window_empty_tail = window_front + 63 - _lzcnt_u64(word_with_fstc);
+        if (window_empty_tail >= size())
+          break;
+        auto next_empty_pos = bc_[window_empty_tail].succ();
+        if (next_empty_pos == empty_head_)
+          break;
+        assert(next_empty_pos - window_front >= 64);
+        offset = next_empty_pos - fstc;
 
-        }
       }
     }
     return size() - fstc;

@@ -53,6 +53,8 @@ int main(int argc, char* argv[]) {
   Benchmark<plain_da::PlainDa<0>>(keyset);
   std::cout << "- Bit-parallelism" << std::endl;
   Benchmark<plain_da::PlainDa<1>>(keyset);
+  std::cout << "- Bit-parallelism + Empty-Link" << std::endl;
+  Benchmark<plain_da::PlainDa<2>>(keyset);
 
   return 0;
 }
