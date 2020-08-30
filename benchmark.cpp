@@ -3,6 +3,10 @@
 #include <iostream>
 #include <fstream>
 #include <chrono>
+#include <string>
+#include <string_view>
+
+#include "keyset_handler.hpp"
 
 template <class Fn>
 double ProcessTime(Fn fn) {
@@ -13,7 +17,7 @@ double ProcessTime(Fn fn) {
 }
 
 template <class Da>
-void Benchmark(const std::vector<std::string>& keyset) {
+void Benchmark(const plain_da::KeysetHandler& keyset) {
   Da plain_da;
   auto construction_time = ProcessTime([&] {
     plain_da.Build(keyset);
@@ -43,11 +47,7 @@ int main(int argc, char* argv[]) {
     std::cerr << argv[1] << " is not found!" << std::endl;
     exit(EXIT_FAILURE);
   }
-
-  std::vector<std::string> keyset;
-  for (std::string key; std::getline(ifs, key); ) {
-    keyset.push_back(key);
-  }
+  plain_da::KeysetHandler keyset(ifs);
 
   std::cout << "- Empty-Link method" << std::endl;
   Benchmark<plain_da::PlainDa<0>>(keyset);

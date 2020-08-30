@@ -12,6 +12,7 @@
 #include <bo.hpp>
 
 #include "bit_vector.hpp"
+#include "keyset_handler.hpp"
 
 namespace plain_da {
 
@@ -25,13 +26,25 @@ class PlainDa {
 
  public:
   PlainDa() = default;
-  explicit PlainDa(const std::vector<std::string>& keyset) {
+  template <typename KeysetContainer>
+  explicit PlainDa(const KeysetContainer& keyset) {
     Build(keyset);
   }
 
-  void Build(const std::vector<std::string>& keyset);
+  template <typename KeysetContainer>
+  void Build(const KeysetContainer& keyset);
+
+  size_t size() const { return bc_.size(); }
 
   bool contains(const std::string& key) const {
+    return _contains(key);
+  }
+  bool contains(std::string_view key) const {
+    return _contains(key);
+  }
+ private:
+  template <typename Key>
+  bool _contains(Key key) const {
     index_type idx = 0;
     for (uint8_t c : key) {
       auto nxt = bc_[idx].base + c;
@@ -65,8 +78,6 @@ class PlainDa {
   size_t cnt_skip_ = 0;
   uint64_t time_fb_ = 0;
 
-  size_t size() const { return bc_.size(); }
-
   void SetDisabled(index_type pos);
 
   void SetEnabled(index_type pos);
@@ -80,9 +91,10 @@ class PlainDa {
 
 
 template <int ConstructionType>
-void PlainDa<ConstructionType>::Build(const std::vector<std::string>& keyset) {
+template <typename KeysetContainer>
+void PlainDa<ConstructionType>::Build(const KeysetContainer& keyset) {
   // A keys in keyset is required to be sorted and unique.
-  using key_iterator = std::vector<std::string>::const_iterator;
+  using key_iterator = typename KeysetTraits<KeysetContainer>::const_iterator;
   auto dfs = [&](
       const auto dfs,
       const key_iterator begin,
@@ -246,13 +258,15 @@ PlainDa<ConstructionType>::FindBase(const Container& children) {
       } else if constexpr (ConstructionType == 2) {
 
         auto window_front = offset + fstc;
-        assert(!exists_bits_[window_front]);
-        uint64_t word_with_fstc = ~exists_bits_.word(window_front);
+        uint64_t word_with_fstc = ~exists_bits_.bits64(window_front);
         assert(word_with_fstc != 0ull);
-        auto window_empty_tail = window_front + 63 - bo::clz_u64(word_with_fstc);
+        auto clz = bo::clz_u64(word_with_fstc);
+        auto window_empty_tail = window_front + 63 - clz;
         if (window_empty_tail >= size())
           break;
+        assert(!bc_[window_empty_tail].Enabled());
         auto next_empty_pos = bc_[window_empty_tail].succ();
+        assert(!bc_[next_empty_pos].Enabled());
         if (next_empty_pos == empty_head_)
           break;
         assert(next_empty_pos - window_front >= 64);
