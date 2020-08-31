@@ -49,14 +49,6 @@ class KeysetHandler {
 };
 
 
-template <typename T>
-struct KeysetTraits {
-  using value_type = typename T::value_type;
-  using iterator = typename T::iterator;
-  using const_iterator = typename T::const_iterator;
-};
-
-
 class RawTrie {
  public:
   static constexpr uint8_t kLeafChar = '\0';
@@ -73,10 +65,8 @@ class RawTrie {
   TableType edge_table_;
 
  public:
-  RawTrie() = default;
-  template <typename KeysetContainer>
-  explicit RawTrie(const KeysetContainer& keyset) {
-    using key_iterator = typename KeysetTraits<KeysetContainer>::const_iterator;
+  explicit RawTrie(const KeysetHandler& keyset) {
+    using key_iterator = typename KeysetHandler::const_iterator;
     auto dfs = [&](
         const auto dfs,
         const key_iterator begin,

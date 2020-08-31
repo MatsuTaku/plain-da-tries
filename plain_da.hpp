@@ -26,13 +26,12 @@ class PlainDa {
 
  public:
   PlainDa() = default;
-  template <typename KeysetContainer>
-  explicit PlainDa(const KeysetContainer& keyset) {
+
+  explicit PlainDa(const KeysetHandler& keyset) {
     Build(keyset);
   }
 
-  template <typename KeysetContainer>
-  void Build(const KeysetContainer& keyset);
+  void Build(const KeysetHandler& keyset);
 
   explicit PlainDa(const RawTrie& trie) {
     Build(trie);
@@ -97,10 +96,9 @@ class PlainDa {
 
 
 template <int ConstructionType>
-template <typename KeysetContainer>
-void PlainDa<ConstructionType>::Build(const KeysetContainer& keyset) {
+void PlainDa<ConstructionType>::Build(const KeysetHandler& keyset) {
   // A keys in keyset is required to be sorted and unique.
-  using key_iterator = typename KeysetTraits<KeysetContainer>::const_iterator;
+  using key_iterator = typename KeysetHandler::const_iterator;
   auto dfs = [&](
       const auto dfs,
       const key_iterator begin,
@@ -169,6 +167,7 @@ void PlainDa<ConstructionType>::Build(const RawTrie& trie) {
   ) -> void {
     auto& edges = trie[trie_node];
     std::vector<uint8_t> children;
+    children.reserve(edges.size());
     for (auto e : edges) {
       children.push_back(e.c);
     }
