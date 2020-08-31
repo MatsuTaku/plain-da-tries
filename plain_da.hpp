@@ -12,7 +12,7 @@
 #include <bo.hpp>
 
 #include "bit_vector.hpp"
-#include "keyset_handler.hpp"
+#include "keyset.hpp"
 
 namespace plain_da {
 
@@ -33,6 +33,12 @@ class PlainDa {
 
   template <typename KeysetContainer>
   void Build(const KeysetContainer& keyset);
+
+  explicit PlainDa(const RawTrie& trie) {
+    Build(trie);
+  }
+
+  void Build(const RawTrie& trie);
 
   size_t size() const { return bc_.size(); }
 
@@ -148,6 +154,50 @@ void PlainDa<ConstructionType>::Build(const KeysetContainer& keyset) {
   SetEnabled(root_index);
   bc_[root_index].check = std::numeric_limits<index_type>::max();
   dfs(dfs, keyset.cbegin(), keyset.cend(), 0, root_index);
+
+  std::cout << "\tCount roops: " << cnt_skip_ << std::endl;
+  std::cout << "\tFindBase time: " << std::fixed << (double)time_fb_/1000000 << " ￿s" << std::endl;
+}
+
+template <int ConstructionType>
+void PlainDa<ConstructionType>::Build(const RawTrie& trie) {
+  // A keys in keyset is required to be sorted and unique.
+  auto dfs = [&](
+      const auto dfs,
+      size_t trie_node,
+      size_t da_index
+  ) -> void {
+    auto& edges = trie[trie_node];
+    std::vector<uint8_t> children;
+    for (auto e : edges) {
+      children.push_back(e.c);
+    }
+
+    assert(!children.empty());
+    auto start_t = std::chrono::high_resolution_clock::now();
+    auto base = FindBase(children);
+    auto end_t = std::chrono::high_resolution_clock::now();
+    time_fb_ += std::chrono::duration_cast<std::chrono::microseconds>(end_t-start_t).count();
+
+    bc_[da_index].base = base;
+    CheckExpand(base + children.back());
+    for (uint8_t c : children) {
+      auto pos = base + c;
+      SetEnabled(pos);
+      bc_[pos].check = da_index;
+    }
+
+    for (auto e : edges) {
+      if (e.next == -1)
+        continue;
+      dfs(dfs, e.next, base + e.c);
+    }
+  };
+  const index_type root_index = 0;
+  CheckExpand(root_index);
+  SetEnabled(root_index);
+  bc_[root_index].check = std::numeric_limits<index_type>::max();
+  dfs(dfs, 0, root_index);
 
   std::cout << "\tCount roops: " << cnt_skip_ << std::endl;
   std::cout << "\tFindBase time: " << std::fixed << (double)time_fb_/1000000 << " ￿s" << std::endl;

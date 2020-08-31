@@ -3,10 +3,8 @@
 #include <iostream>
 #include <fstream>
 #include <chrono>
-#include <string>
-#include <string_view>
 
-#include "keyset_handler.hpp"
+#include "keyset.hpp"
 
 template <class Fn>
 double ProcessTime(Fn fn) {
@@ -17,10 +15,10 @@ double ProcessTime(Fn fn) {
 }
 
 template <class Da>
-void Benchmark(const plain_da::KeysetHandler& keyset) {
+void Benchmark(const plain_da::KeysetHandler& keyset, const plain_da::RawTrie& trie) {
   Da plain_da;
   auto construction_time = ProcessTime([&] {
-    plain_da.Build(keyset);
+    plain_da.Build(trie);
   });
   std::cout << "construction_time: \t" << construction_time/1000000 << " s" << std::endl;
 
@@ -33,7 +31,7 @@ void Benchmark(const plain_da::KeysetHandler& keyset) {
       }
     }
   });
-  std::cout << "lookup_time: \t" << lookup_time/keyset.size() << " µs/key" << std::endl;
+  std::cout << "lookup_time: \t" << lookup_time/trie.size() << " µs/key" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -48,13 +46,14 @@ int main(int argc, char* argv[]) {
     exit(EXIT_FAILURE);
   }
   plain_da::KeysetHandler keyset(ifs);
+  plain_da::RawTrie trie(keyset);
 
   std::cout << "- Empty-Link method" << std::endl;
-  Benchmark<plain_da::PlainDa<0>>(keyset);
+  Benchmark<plain_da::PlainDa<0>>(keyset, trie);
   std::cout << "- Bit-parallelism" << std::endl;
-  Benchmark<plain_da::PlainDa<1>>(keyset);
+  Benchmark<plain_da::PlainDa<1>>(keyset, trie);
   std::cout << "- Bit-parallelism + Empty-Link" << std::endl;
-  Benchmark<plain_da::PlainDa<2>>(keyset);
+  Benchmark<plain_da::PlainDa<2>>(keyset, trie);
 
   return 0;
 }
