@@ -13,5 +13,5 @@ endif()
 
 add_executable(bench benchmark.cpp)
 
-add_subdirectory(libbo)
+add_subdirectory(libbo EXCLUDE_FROM_ALL)
 target_link_libraries(bench PRIVATE libbo)
