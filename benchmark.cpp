@@ -6,13 +6,18 @@
 
 #include "keyset.hpp"
 
+namespace {
+
 template <class Fn>
 double ProcessTime(Fn fn) {
   auto start = std::chrono::high_resolution_clock::now();
   fn();
   auto now = std::chrono::high_resolution_clock::now();
-  return (double) std::chrono::duration_cast<std::chrono::microseconds>(now-start).count();
+  return std::chrono::duration<double, std::micro>(now-start).count();
 }
+
+constexpr int BenchKeyCounts = 1000000;
+constexpr int LoopTimes = 10;
 
 template <class Da>
 void Benchmark(const plain_da::KeysetHandler& keyset, const plain_da::RawTrie& trie) {
@@ -22,16 +27,40 @@ void Benchmark(const plain_da::KeysetHandler& keyset, const plain_da::RawTrie& t
   });
   std::cout << "construction_time: \t" << construction_time/1000000 << " s" << std::endl;
 
-  auto lookup_time = ProcessTime([&] {
-    for (auto& key : keyset) {
+  { // Check is construction perfect.
+    for (auto &key : keyset) {
       bool ok = plain_da.contains(key);
       if (!ok) {
         std::cout << "ERROR! " << key << "\t is not contained!" << std::endl;
         return;
       }
     }
+  }
+
+  std::vector<std::string> bench_keyset(BenchKeyCounts);
+  for (int i = 0; i < BenchKeyCounts; i++) {
+    bench_keyset[i] = keyset[random()%keyset.size()];
+  }
+  auto bench_for_random_keys = [&] {
+    for (auto &key : bench_keyset) {
+      bool ok = plain_da.contains(key);
+      if (!ok) {
+        std::cout << "ERROR! " << key << "\t is not contained!" << std::endl;
+        return;
+      }
+    }
+  };
+  { // Warm up
+    bench_for_random_keys();
+  }
+  auto lookup_time = ProcessTime([&] {
+    for (int i = 0; i < LoopTimes; i++) {
+      bench_for_random_keys();
+    }
   });
-  std::cout << "lookup_time: \t" << lookup_time/trie.size() << " µs/key" << std::endl;
+  std::cout << "lookup_time: \t" << lookup_time/trie.size()/LoopTimes << " µs/key" << std::endl;
+}
+
 }
 
 int main(int argc, char* argv[]) {
@@ -48,12 +77,14 @@ int main(int argc, char* argv[]) {
   plain_da::KeysetHandler keyset(ifs);
   plain_da::RawTrie trie(keyset);
 
-  std::cout << "- Empty-Link method" << std::endl;
-  Benchmark<plain_da::PlainDa<0>>(keyset, trie);
+//  std::cout << "- Empty-Link method" << std::endl;
+//  Benchmark<plain_da::PlainDa<plain_da::da_construction_type_ELM, false>>(keyset, trie);
   std::cout << "- Bit-parallelism" << std::endl;
-  Benchmark<plain_da::PlainDa<1>>(keyset, trie);
-  std::cout << "- Bit-parallelism + Empty-Link" << std::endl;
-  Benchmark<plain_da::PlainDa<2>>(keyset, trie);
+  Benchmark<plain_da::PlainDa<plain_da::da_construction_type_WW, false>>(keyset, trie);
+  std::cout << "- Bit-parallelism + EdgeOrdering" << std::endl;
+  Benchmark<plain_da::PlainDa<plain_da::da_construction_type_WW, true>>(keyset, trie);
+//  std::cout << "- Bit-parallelism + Empty-Link" << std::endl;
+//  Benchmark<plain_da::PlainDa<plain_da::da_construction_type_WW_ELM, false>>(keyset, trie);
 
   return 0;
 }

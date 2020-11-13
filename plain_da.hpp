@@ -8,6 +8,9 @@
 #include <iostream>
 #include <bitset>
 #include <chrono>
+#include <iterator>
+#include <numeric>
+#include <algorithm>
 
 #include <bo.hpp>
 
@@ -16,7 +19,12 @@
 
 namespace plain_da {
 
-template <int ConstructionType>
+struct da_construction_type_ELM {};
+struct da_construction_type_WW {};
+struct da_construction_type_WW_ELM {};
+
+
+template <typename ConstructionType, bool EdgeOrdering>
 class PlainDa {
  public:
   using index_type = int32_t;
@@ -95,83 +103,82 @@ class PlainDa {
 };
 
 
-template <int ConstructionType>
-void PlainDa<ConstructionType>::Build(const KeysetHandler& keyset) {
+template <typename ConstructionType, bool EdgeOrdering>
+void PlainDa<ConstructionType, EdgeOrdering>::Build(const KeysetHandler& keyset) {
   // A keys in keyset is required to be sorted and unique.
   using key_iterator = typename KeysetHandler::const_iterator;
-  auto dfs = [&](
-      const auto dfs,
-      const key_iterator begin,
-      const key_iterator end,
-      int depth,
-      index_type da_index
-      ) -> void {
-    std::deque<uint8_t> children;
-    assert(begin < end);
-    auto keyit = begin;
-    if (keyit->size() == depth) {
-      children.push_back(kLeafChar);
-      ++keyit;
-    }
 
-    std::vector<key_iterator> its;
-    uint8_t pibot_char = kLeafChar;
-    while (keyit < end) {
-      uint8_t c = (*keyit)[depth];
-      if (pibot_char < c) {
-        children.push_back(c);
-        its.push_back(keyit);
-        pibot_char = c;
+  if constexpr (!EdgeOrdering) {
+
+    auto dfs = [&](
+        const auto dfs,
+        const key_iterator begin,
+        const key_iterator end,
+        int depth,
+        index_type da_index
+    ) -> void {
+      std::deque<uint8_t> children;
+      assert(begin < end);
+      auto keyit = begin;
+      if (keyit->size() == depth) {
+        children.push_back(kLeafChar);
+        ++keyit;
       }
-      ++keyit;
-    }
-    its.push_back(end);
 
-    assert(!children.empty());
-    auto start_t = std::chrono::high_resolution_clock::now();
-    auto base = FindBase(children);
-    auto end_t = std::chrono::high_resolution_clock::now();
-    time_fb_ += std::chrono::duration_cast<std::chrono::microseconds>(end_t-start_t).count();
+      std::vector<key_iterator> its;
+      uint8_t pibot_char = kLeafChar;
+      while (keyit < end) {
+        uint8_t c = (*keyit)[depth];
+        if (pibot_char < c) {
+          children.push_back(c);
+          its.push_back(keyit);
+          pibot_char = c;
+        }
+        ++keyit;
+      }
+      its.push_back(end);
 
-    bc_[da_index].base = base;
-    CheckExpand(base + children.back());
-    for (uint8_t c : children) {
-      auto pos = base + c;
-      SetEnabled(pos);
-      bc_[pos].check = da_index;
-    }
+      assert(!children.empty());
+      auto start_t = std::chrono::high_resolution_clock::now();
+      auto base = FindBase(children);
+      auto end_t = std::chrono::high_resolution_clock::now();
+      time_fb_ += std::chrono::duration_cast<std::chrono::microseconds>(end_t-start_t).count();
 
-    if (children.front() == kLeafChar)
-      children.pop_front();
-    for (int i = 0; i < children.size(); i++) {
-      dfs(dfs, its[i], its[i+1], depth+1, base + children[i]);
-    }
-  };
-  const index_type root_index = 0;
-  CheckExpand(root_index);
-  SetEnabled(root_index);
-  bc_[root_index].check = std::numeric_limits<index_type>::max();
-  dfs(dfs, keyset.cbegin(), keyset.cend(), 0, root_index);
+      bc_[da_index].base = base;
+      CheckExpand(base + children.back());
+      for (uint8_t c : children) {
+        auto pos = base + c;
+        SetEnabled(pos);
+        bc_[pos].check = da_index;
+      }
 
-  std::cout << "\tCount roops: " << cnt_skip_ << std::endl;
-  std::cout << "\tFindBase time: " << std::fixed << (double)time_fb_/1000000 << " ￿s" << std::endl;
+      if (children.front() == kLeafChar)
+        children.pop_front();
+      for (int i = 0; i < children.size(); i++) {
+        dfs(dfs, its[i], its[i+1], depth+1, bc_[da_index].base + children[i]);
+      }
+    };
+    const index_type root_index = 0;
+    CheckExpand(root_index);
+    SetEnabled(root_index);
+    bc_[root_index].check = std::numeric_limits<index_type>::max();
+    dfs(dfs, keyset.cbegin(), keyset.cend(), 0, root_index);
+
+    std::cout << "\tCount roops: " << cnt_skip_ << std::endl;
+    std::cout << "\tFindBase time: " << std::fixed << (double)time_fb_/1000000 << " ￿s" << std::endl;
+
+  } else {
+
+    Build(RawTrie(keyset));
+
+  }
 }
 
-template <int ConstructionType>
-void PlainDa<ConstructionType>::Build(const RawTrie& trie) {
+template <typename ConstructionType, bool EdgeOrdering>
+void PlainDa<ConstructionType, EdgeOrdering>::Build(const RawTrie& trie) {
   // A keys in keyset is required to be sorted and unique.
-  auto dfs = [&](
-      const auto dfs,
-      size_t trie_node,
-      size_t da_index
-  ) -> void {
-    auto& edges = trie[trie_node];
-    std::vector<uint8_t> children;
-    children.reserve(edges.size());
-    for (auto e : edges) {
-      children.push_back(e.c);
-    }
 
+  auto da_save_edges = [&](std::vector<uint8_t>& children, index_type da_index) {
     assert(!children.empty());
     auto start_t = std::chrono::high_resolution_clock::now();
     auto base = FindBase(children);
@@ -185,25 +192,89 @@ void PlainDa<ConstructionType>::Build(const RawTrie& trie) {
       SetEnabled(pos);
       bc_[pos].check = da_index;
     }
-
-    for (auto e : edges) {
-      if (e.next == -1)
-        continue;
-      dfs(dfs, e.next, base + e.c);
-    }
   };
-  const index_type root_index = 0;
-  CheckExpand(root_index);
-  SetEnabled(root_index);
-  bc_[root_index].check = std::numeric_limits<index_type>::max();
-  dfs(dfs, 0, root_index);
+
+  if constexpr (!EdgeOrdering) {
+
+    auto dfs = [&](
+        const auto dfs,
+        size_t trie_node,
+        size_t da_index
+    ) -> void {
+      auto& edges = trie[trie_node];
+      std::vector<uint8_t> children;
+      children.reserve(edges.size());
+      for (auto e : edges) {
+        children.push_back(e.c);
+      }
+
+      da_save_edges(children, da_index);
+
+      for (auto e : edges) {
+        if (e.next == -1)
+          continue;
+        dfs(dfs, e.next, bc_[da_index].base + e.c);
+      }
+    };
+    const index_type root_index = 0;
+    CheckExpand(root_index);
+    SetEnabled(root_index);
+    bc_[root_index].check = std::numeric_limits<index_type>::max();
+    dfs(dfs, 0, root_index);
+
+  } else {
+
+    std::vector<int> size(trie.size());
+    auto set_trie_size = [&](const auto dfs, int s) -> int {
+      int sz = 1;
+      for (auto [c, t] : trie[s]) {
+        if (t == -1)
+          sz++;
+        else
+          sz += dfs(dfs, t);
+      }
+      size[s] = sz;
+      return sz;
+    };
+    set_trie_size(set_trie_size, 0);
+
+    auto dfs = [&](
+        const auto dfs,
+        int trie_node,
+        index_type da_index
+    ) -> void {
+      auto& edges = trie[trie_node];
+      std::vector<uint8_t> children;
+      children.reserve(edges.size());
+      for (auto e : edges)
+        children.push_back(e.c);
+
+      da_save_edges(children, da_index);
+
+      std::deque<int> order(edges.size());
+      std::iota(order.begin(), order.end(), 0);
+      if (children[0] == kLeafChar)
+        order.pop_front();
+      std::sort(order.begin(), order.end(), [&](int l, int r) { return size[edges[l].next] > size[edges[r].next]; });
+      for (auto i : order) {
+        assert(edges[i].next != -1);
+        dfs(dfs, trie[trie_node][i].next, bc_[da_index].base + children[i]);
+      }
+    };
+    const index_type root_index = 0;
+    CheckExpand(root_index);
+    SetEnabled(root_index);
+    bc_[root_index].check = std::numeric_limits<index_type>::max();
+    dfs(dfs, 0, root_index);
+
+  }
 
   std::cout << "\tCount roops: " << cnt_skip_ << std::endl;
   std::cout << "\tFindBase time: " << std::fixed << (double)time_fb_/1000000 << " ￿s" << std::endl;
 }
 
-template <int ConstructionType>
-void PlainDa<ConstructionType>::SetDisabled(index_type pos) {
+template <typename ConstructionType, bool EdgeOrdering>
+void PlainDa<ConstructionType, EdgeOrdering>::SetDisabled(index_type pos) {
   if (empty_head_ == kInvalidIndex) {
     empty_head_ = pos;
     bc_[pos].set_succ(pos);
@@ -215,13 +286,13 @@ void PlainDa<ConstructionType>::SetDisabled(index_type pos) {
     bc_[pos].set_succ(empty_head_);
     bc_[pos].set_pred(back_pos);
   }
-  if constexpr (ConstructionType != 0) {
+  if constexpr (!std::is_same_v<ConstructionType, da_construction_type_ELM>) {
     exists_bits_[pos] = false;
   }
 }
 
-template <int ConstructionType>
-void PlainDa<ConstructionType>::SetEnabled(index_type pos) {
+template <typename ConstructionType, bool EdgeOrdering>
+void PlainDa<ConstructionType, EdgeOrdering>::SetEnabled(index_type pos) {
   assert(!bc_[pos].Enabled());
   auto succ_pos = bc_[pos].succ();
   if (pos == empty_head_) {
@@ -230,19 +301,19 @@ void PlainDa<ConstructionType>::SetEnabled(index_type pos) {
   auto pred_pos = bc_[pos].pred();
   bc_[pred_pos].set_succ(succ_pos);
   bc_[succ_pos].set_pred(pred_pos);
-  if constexpr (ConstructionType != 0) {
+  if constexpr (!std::is_same_v<ConstructionType, da_construction_type_ELM>) {
     exists_bits_[pos] = true;
   }
 }
 
-template <int ConstructionType>
-void PlainDa<ConstructionType>::CheckExpand(index_type pos) {
+template <typename ConstructionType, bool EdgeOrdering>
+void PlainDa<ConstructionType, EdgeOrdering>::CheckExpand(index_type pos) {
   auto old_size = size();
   auto new_size = pos + 1;
   if (new_size <= old_size)
     return;
   bc_.resize(new_size);
-  if constexpr (ConstructionType != 0) {
+  if constexpr (!std::is_same_v<ConstructionType, da_construction_type_ELM>) {
     exists_bits_.resize(new_size);
   }
   for (auto i = old_size; i < new_size; i++) {
@@ -250,10 +321,10 @@ void PlainDa<ConstructionType>::CheckExpand(index_type pos) {
   }
 }
 
-template <int ConstructionType>
+template <typename ConstructionType, bool EdgeOrdering>
 template <typename Container>
-typename PlainDa<ConstructionType>::index_type
-PlainDa<ConstructionType>::FindBase(const Container& children) {
+typename PlainDa<ConstructionType, EdgeOrdering>::index_type
+PlainDa<ConstructionType, EdgeOrdering>::FindBase(const Container& children) {
   assert(!children.empty());
   uint8_t fstc = children[0];
 
@@ -263,7 +334,7 @@ PlainDa<ConstructionType>::FindBase(const Container& children) {
   if (children.size() == 1)
     return empty_head_ - fstc;
 
-  if constexpr (ConstructionType == 0) {
+  if constexpr (std::is_same_v<ConstructionType, da_construction_type_ELM>) {
 
     index_type base_front = empty_head_ - fstc;
     auto base = base_front;
@@ -300,11 +371,11 @@ PlainDa<ConstructionType>::FindBase(const Container& children) {
         return offset + bo::ctz_u64(bits);
       }
 
-      if constexpr (ConstructionType == 1) {
+      if constexpr (std::is_same_v<ConstructionType, da_construction_type_WW>) {
 
         offset += 64;
 
-      } else if constexpr (ConstructionType == 2) {
+      } else if constexpr (std::is_same_v<ConstructionType, da_construction_type_WW_ELM>) {
 
         auto window_front = offset + fstc;
         uint64_t word_with_fstc = ~exists_bits_.bits64(window_front);
