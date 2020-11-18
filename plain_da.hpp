@@ -19,12 +19,15 @@
 
 namespace plain_da {
 
+struct da_plus_operation_tag {};
+struct da_xor_operation_tag {};
+
 struct da_construction_type_ELM {};
 struct da_construction_type_WW {};
 struct da_construction_type_WW_ELM {};
 
 
-template <typename ConstructionType, bool EdgeOrdering>
+template <typename TransitionTag, typename ConstructionType, bool EdgeOrdering>
 class PlainDa {
  public:
   using index_type = int32_t;
@@ -60,13 +63,13 @@ class PlainDa {
   bool _contains(Key key) const {
     index_type idx = 0;
     for (uint8_t c : key) {
-      auto nxt = bc_[idx].base + c;
+      auto nxt = Operate(bc_[idx].base, c);
       if (nxt >= bc_.size() or bc_[nxt].check != idx) {
         return false;
       }
       idx = nxt;
     }
-    auto nxt = bc_[idx].base + kLeafChar;
+    auto nxt = Operate(bc_[idx].base, kLeafChar);
     return !(nxt >= bc_.size() or bc_[nxt].check != idx);
   }
 
@@ -88,8 +91,20 @@ class PlainDa {
   std::vector<DaUnit> bc_;
   BitVector exists_bits_;
   index_type empty_head_ = kInvalidIndex;
-  size_t cnt_skip_ = 0;
-  uint64_t time_fb_ = 0;
+
+  index_type Operate(index_type base, uint8_t c) const {
+    if constexpr (std::is_same_v<TransitionTag, da_plus_operation_tag>)
+      return base + c;
+    else if constexpr (std::is_same_v<TransitionTag, da_xor_operation_tag>)
+      return base ^ c;
+  }
+
+  index_type InvOperate(index_type base, uint8_t c) const {
+    if constexpr (std::is_same_v<TransitionTag, da_plus_operation_tag>)
+      return base - c;
+    else if constexpr (std::is_same_v<TransitionTag, da_xor_operation_tag>)
+      return base ^ c;
+  }
 
   void SetDisabled(index_type pos);
 
@@ -98,18 +113,20 @@ class PlainDa {
   void CheckExpand(index_type pos);
 
   template <typename Container>
-  index_type FindBase(const Container& children);
+  index_type FindBase(const Container& children, size_t* counter) const;
 
 };
 
 
-template <typename ConstructionType, bool EdgeOrdering>
-void PlainDa<ConstructionType, EdgeOrdering>::Build(const KeysetHandler& keyset) {
+template <typename TransitionTag, typename ConstructionType, bool EdgeOrdering>
+void PlainDa<TransitionTag, ConstructionType, EdgeOrdering>::Build(const KeysetHandler& keyset) {
   // A keys in keyset is required to be sorted and unique.
   using key_iterator = typename KeysetHandler::const_iterator;
 
   if constexpr (!EdgeOrdering) {
 
+    size_t cnt_skip = 0;
+    uint64_t time_fb = 0;
     auto dfs = [&](
         const auto dfs,
         const key_iterator begin,
@@ -140,14 +157,14 @@ void PlainDa<ConstructionType, EdgeOrdering>::Build(const KeysetHandler& keyset)
 
       assert(!children.empty());
       auto start_t = std::chrono::high_resolution_clock::now();
-      auto base = FindBase(children);
+      auto base = FindBase(children, &cnt_skip);
       auto end_t = std::chrono::high_resolution_clock::now();
-      time_fb_ += std::chrono::duration_cast<std::chrono::microseconds>(end_t-start_t).count();
+      time_fb += std::chrono::duration_cast<std::chrono::microseconds>(end_t-start_t).count();
 
       bc_[da_index].base = base;
-      CheckExpand(base + children.back());
+      CheckExpand(Operate(base, children.back()));
       for (uint8_t c : children) {
-        auto pos = base + c;
+        auto pos = Operate(base, c);
         SetEnabled(pos);
         bc_[pos].check = da_index;
       }
@@ -155,7 +172,7 @@ void PlainDa<ConstructionType, EdgeOrdering>::Build(const KeysetHandler& keyset)
       if (children.front() == kLeafChar)
         children.pop_front();
       for (int i = 0; i < children.size(); i++) {
-        dfs(dfs, its[i], its[i+1], depth+1, bc_[da_index].base + children[i]);
+        dfs(dfs, its[i], its[i+1], depth+1, Operate(bc_[da_index].base, children[i]));
       }
     };
     const index_type root_index = 0;
@@ -164,8 +181,8 @@ void PlainDa<ConstructionType, EdgeOrdering>::Build(const KeysetHandler& keyset)
     bc_[root_index].check = std::numeric_limits<index_type>::max();
     dfs(dfs, keyset.cbegin(), keyset.cend(), 0, root_index);
 
-    std::cout << "\tCount roops: " << cnt_skip_ << std::endl;
-    std::cout << "\tFindBase time: " << std::fixed << (double)time_fb_/1000000 << " ￿s" << std::endl;
+    std::cout << "\tCount roops: " << cnt_skip << std::endl;
+    std::cout << "\tFindBase time: " << std::fixed << (double)time_fb/1000000 << " ￿s" << std::endl;
 
   } else {
 
@@ -174,21 +191,23 @@ void PlainDa<ConstructionType, EdgeOrdering>::Build(const KeysetHandler& keyset)
   }
 }
 
-template <typename ConstructionType, bool EdgeOrdering>
-void PlainDa<ConstructionType, EdgeOrdering>::Build(const RawTrie& trie) {
+template <typename TransitionTag, typename ConstructionType, bool EdgeOrdering>
+void PlainDa<TransitionTag, ConstructionType, EdgeOrdering>::Build(const RawTrie& trie) {
   // A keys in keyset is required to be sorted and unique.
 
+  size_t cnt_skip = 0;
+  uint64_t time_fb = 0;
   auto da_save_edges = [&](std::vector<uint8_t>& children, index_type da_index) {
     assert(!children.empty());
     auto start_t = std::chrono::high_resolution_clock::now();
-    auto base = FindBase(children);
+    auto base = FindBase(children, &cnt_skip);
     auto end_t = std::chrono::high_resolution_clock::now();
-    time_fb_ += std::chrono::duration_cast<std::chrono::microseconds>(end_t-start_t).count();
+    time_fb += std::chrono::duration_cast<std::chrono::microseconds>(end_t-start_t).count();
 
     bc_[da_index].base = base;
-    CheckExpand(base + children.back());
+    CheckExpand(Operate(base, children.back()));
     for (uint8_t c : children) {
-      auto pos = base + c;
+      auto pos = Operate(base, c);
       SetEnabled(pos);
       bc_[pos].check = da_index;
     }
@@ -213,7 +232,7 @@ void PlainDa<ConstructionType, EdgeOrdering>::Build(const RawTrie& trie) {
       for (auto e : edges) {
         if (e.next == -1)
           continue;
-        dfs(dfs, e.next, bc_[da_index].base + e.c);
+        dfs(dfs, e.next, Operate(bc_[da_index].base, e.c));
       }
     };
     const index_type root_index = 0;
@@ -258,7 +277,7 @@ void PlainDa<ConstructionType, EdgeOrdering>::Build(const RawTrie& trie) {
       std::sort(order.begin(), order.end(), [&](int l, int r) { return size[edges[l].next] > size[edges[r].next]; });
       for (auto i : order) {
         assert(edges[i].next != -1);
-        dfs(dfs, trie[trie_node][i].next, bc_[da_index].base + children[i]);
+        dfs(dfs, trie[trie_node][i].next, Operate(bc_[da_index].base, children[i]));
       }
     };
     const index_type root_index = 0;
@@ -269,12 +288,12 @@ void PlainDa<ConstructionType, EdgeOrdering>::Build(const RawTrie& trie) {
 
   }
 
-  std::cout << "\tCount roops: " << cnt_skip_ << std::endl;
-  std::cout << "\tFindBase time: " << std::fixed << (double)time_fb_/1000000 << " ￿s" << std::endl;
+  std::cout << "\tCount roops: " << cnt_skip << std::endl;
+  std::cout << "\tFindBase time: " << std::fixed << (double)time_fb/1000000 << " ￿s" << std::endl;
 }
 
-template <typename ConstructionType, bool EdgeOrdering>
-void PlainDa<ConstructionType, EdgeOrdering>::SetDisabled(index_type pos) {
+template <typename TransitionTag, typename ConstructionType, bool EdgeOrdering>
+void PlainDa<TransitionTag, ConstructionType, EdgeOrdering>::SetDisabled(index_type pos) {
   if (empty_head_ == kInvalidIndex) {
     empty_head_ = pos;
     bc_[pos].set_succ(pos);
@@ -291,8 +310,8 @@ void PlainDa<ConstructionType, EdgeOrdering>::SetDisabled(index_type pos) {
   }
 }
 
-template <typename ConstructionType, bool EdgeOrdering>
-void PlainDa<ConstructionType, EdgeOrdering>::SetEnabled(index_type pos) {
+template <typename TransitionTag, typename ConstructionType, bool EdgeOrdering>
+void PlainDa<TransitionTag, ConstructionType, EdgeOrdering>::SetEnabled(index_type pos) {
   assert(!bc_[pos].Enabled());
   auto succ_pos = bc_[pos].succ();
   if (pos == empty_head_) {
@@ -306,10 +325,10 @@ void PlainDa<ConstructionType, EdgeOrdering>::SetEnabled(index_type pos) {
   }
 }
 
-template <typename ConstructionType, bool EdgeOrdering>
-void PlainDa<ConstructionType, EdgeOrdering>::CheckExpand(index_type pos) {
+template <typename TransitionTag, typename ConstructionType, bool EdgeOrdering>
+void PlainDa<TransitionTag, ConstructionType, EdgeOrdering>::CheckExpand(index_type pos) {
   auto old_size = size();
-  auto new_size = pos + 1;
+  auto new_size = ((pos/256)+1)*256;
   if (new_size <= old_size)
     return;
   bc_.resize(new_size);
@@ -321,81 +340,134 @@ void PlainDa<ConstructionType, EdgeOrdering>::CheckExpand(index_type pos) {
   }
 }
 
-template <typename ConstructionType, bool EdgeOrdering>
+template <typename TransitionTag, typename ConstructionType, bool EdgeOrdering>
 template <typename Container>
-typename PlainDa<ConstructionType, EdgeOrdering>::index_type
-PlainDa<ConstructionType, EdgeOrdering>::FindBase(const Container& children) {
+typename PlainDa<TransitionTag, ConstructionType, EdgeOrdering>::index_type
+PlainDa<TransitionTag, ConstructionType, EdgeOrdering>::FindBase(const Container& children, size_t* counter) const {
+
   assert(!children.empty());
   uint8_t fstc = children[0];
 
   if (empty_head_ == kInvalidIndex)
-    return size() - fstc;
+    return InvOperate(size(), fstc);
 
   if (children.size() == 1)
-    return empty_head_ - fstc;
+    return InvOperate(empty_head_, fstc);
 
   if constexpr (std::is_same_v<ConstructionType, da_construction_type_ELM>) {
 
-    index_type base_front = empty_head_ - fstc;
+    index_type base_front = InvOperate(empty_head_, fstc);
     auto base = base_front;
-    while (base + fstc < size()) {
+    while (Operate(base, fstc) < size()) {
       bool ok = true;
-      assert(!bc_[base + fstc].Enabled());
+      assert(!bc_[Operate(base, fstc)].Enabled());
       for (int i = 1; i < children.size(); i++) {
         uint8_t c = children[i];
-        ok &= base + c >= size() or !bc_[base + c].Enabled();
+        ok &= Operate(base, c) >= size() or !bc_[Operate(base, c)].Enabled();
         if (!ok)
           break;
       }
       if (ok) {
         return base;
       }
-      base = bc_[base + fstc].succ() - fstc;
+      base = InvOperate(bc_[Operate(base, fstc)].succ(), fstc);
       if (base == base_front)
         break;
-      cnt_skip_++;
+      if (counter) (*counter)++;
     }
-    return size() - fstc;
+    return InvOperate(size(), fstc);
 
   } else {
 
-    for (int offset = empty_head_-fstc; offset+fstc < size(); ) {
-      uint64_t bits = 0ull;
-      for (uint8_t c : children) {
-        bits |= exists_bits_.bits64(offset + c);
-        if (~bits == 0ull)
-          break;
+    if constexpr (std::is_same_v<TransitionTag, da_plus_operation_tag>) {
+
+      for (int offset = empty_head_-fstc; offset+fstc < size(); ) {
+        uint64_t bits = 0ull;
+        for (uint8_t c : children) {
+          bits |= exists_bits_.bits64(offset + c);
+          if (~bits == 0ull)
+            break;
+        }
+        bits = ~bits;
+        if (bits != 0ull) {
+          return offset + bo::ctz_u64(bits);
+        }
+
+        if constexpr (std::is_same_v<ConstructionType, da_construction_type_WW>) {
+
+          offset += 64;
+
+        } else if constexpr (std::is_same_v<ConstructionType, da_construction_type_WW_ELM>) {
+
+          auto window_front = offset + fstc;
+          uint64_t word_with_fstc = ~exists_bits_.bits64(window_front);
+          assert(word_with_fstc != 0ull);
+          auto clz = bo::clz_u64(word_with_fstc);
+          auto window_empty_tail = window_front + 63 - clz;
+          if (window_empty_tail >= size())
+            break;
+          assert(!bc_[window_empty_tail].Enabled());
+          auto next_empty_pos = bc_[window_empty_tail].succ();
+          assert(!bc_[next_empty_pos].Enabled());
+          if (next_empty_pos == empty_head_)
+            break;
+          assert(next_empty_pos - window_front >= 64);
+          offset = next_empty_pos - fstc;
+
+        }
+        if (counter) (*counter)++;
       }
-      bits = ~bits;
-      if (bits != 0ull) {
-        return offset + bo::ctz_u64(bits);
+      return size() - fstc;
+
+    } else if constexpr (std::is_same_v<TransitionTag, da_xor_operation_tag>) {
+
+      size_t b = empty_head_/256;
+      size_t bend = size()/256;
+      for (; b < bend; ++b) {
+        std::array<uint64_t, 4> bits{};
+        for (uint8_t c : children) {
+          std::array<uint64_t, 4> exists_word;
+          std::memcpy(exists_word.data(), exists_bits_.data()+(b*4), sizeof(uint64_t)*4);
+          if (c & (1<<0))
+            for (int i = 0; i < 4; i++)
+              exists_word[i] |= ((exists_word[i] >> 1) & 0x5555555555555555ull) | ((exists_word[i] & 0x5555555555555555ull) << 1);
+          if (c & (1<<1))
+            for (int i = 0; i < 4; i++)
+              exists_word[i] |= ((exists_word[i] >> 2) & 0x3333333333333333ull) | ((exists_word[i] & 0x3333333333333333ull) << 2);
+          if (c & (1<<2))
+            for (int i = 0; i < 4; i++)
+              exists_word[i] |= ((exists_word[i] >> 4) & 0x0F0F0F0F0F0F0F0Full) | ((exists_word[i] & 0x0F0F0F0F0F0F0F0Full) << 4);
+          if (c & (1<<3))
+            for (int i = 0; i < 4; i++)
+              exists_word[i] |= ((exists_word[i] >> 8) & 0x00FF00FF00FF00FFull) | ((exists_word[i] & 0x00FF00FF00FF00FFull) << 8);
+          if (c & (1<<4))
+            for (int i = 0; i < 4; i++)
+              exists_word[i] |= ((exists_word[i] >> 16) & 0x0000FFFF0000FFFFull) | ((exists_word[i] & 0x0000FFFF0000FFFFull) << 16);
+          if (c & (1<<5))
+            for (int i = 0; i < 4; i++)
+              exists_word[i] |= (exists_word[i] >> 32) | (exists_word[i] << 32);
+          if (c & (1<<6)) {
+            std::swap(exists_word[0], exists_word[1]);
+            std::swap(exists_word[2], exists_word[3]);
+          }
+          if (c & (1<<7)) {
+            std::swap(exists_word[0], exists_word[2]);
+            std::swap(exists_word[1], exists_word[3]);
+          }
+          for (int i = 0; i < 4; i++)
+            bits[i] |= exists_word[i];
+        }
+        for (int i = 0; i < 4; i++) {
+          if (~bits[i] != 0ull) {
+            auto inset = bo::ctz_u64(~bits[i]);
+            return b*256 + i*64 + inset;
+          }
+        }
+        if (counter) (*counter)++;
       }
+      return size();
 
-      if constexpr (std::is_same_v<ConstructionType, da_construction_type_WW>) {
-
-        offset += 64;
-
-      } else if constexpr (std::is_same_v<ConstructionType, da_construction_type_WW_ELM>) {
-
-        auto window_front = offset + fstc;
-        uint64_t word_with_fstc = ~exists_bits_.bits64(window_front);
-        assert(word_with_fstc != 0ull);
-        auto clz = bo::clz_u64(word_with_fstc);
-        auto window_empty_tail = window_front + 63 - clz;
-        if (window_empty_tail >= size())
-          break;
-        assert(!bc_[window_empty_tail].Enabled());
-        auto next_empty_pos = bc_[window_empty_tail].succ();
-        assert(!bc_[next_empty_pos].Enabled());
-        if (next_empty_pos == empty_head_)
-          break;
-        assert(next_empty_pos - window_front >= 64);
-        offset = next_empty_pos - fstc;
-
-      }
-      cnt_skip_++;
     }
-    return size() - fstc;
 
   }
 }

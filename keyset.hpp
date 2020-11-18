@@ -18,19 +18,30 @@ class KeysetHandler {
   std::vector<uint8_t> storage_;
   std::vector<std::string_view> sv_list_;
 
+  std::vector<std::pair<size_t, size_t>> pls_;
+
  public:
+  KeysetHandler() = default;
+
   explicit KeysetHandler(std::istream& is) {
-    std::vector<std::pair<size_t, size_t>> pls;
-    for (std::string key; std::getline(is, key); ) {
-      auto front = storage_.size();
-      storage_.resize(storage_.size() + key.length() + 1);
-      for (int i = 0; i < key.length(); i++)
-        storage_[front + i] = key[i];
-      storage_[front + key.size()] = '\0';
-      pls.emplace_back(front, key.length());
-    }
-    sv_list_.reserve(pls.size());
-    for (auto [p, l] : pls)
+    for (std::string key; std::getline(is, key); )
+      insert(key);
+    update_list();
+  }
+
+  void insert(std::string_view key) {
+    size_t front = storage_.size();
+    storage_.resize(storage_.size() + key.length()+1);
+    for (int i = 0; i < key.length(); i++)
+      storage_[front + i] = key[i];
+    storage_[front + key.length()] = '\0';
+    pls_.emplace_back(front, key.length());
+  }
+
+  void update_list() {
+    sv_list_.clear();
+    sv_list_.reserve(pls_.size());
+    for (auto [p, l] : pls_)
       sv_list_.emplace_back((const char*) storage_.data() + p, l);
   }
 

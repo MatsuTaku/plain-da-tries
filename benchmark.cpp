@@ -20,7 +20,7 @@ constexpr int BenchKeyCounts = 1000000;
 constexpr int LoopTimes = 10;
 
 template <class Da>
-void Benchmark(const plain_da::KeysetHandler& keyset, const plain_da::RawTrie& trie) {
+void Benchmark(const plain_da::KeysetHandler& keyset, const plain_da::RawTrie& trie, const plain_da::KeysetHandler& bench_keyset) {
   Da plain_da;
   auto construction_time = ProcessTime([&] {
     plain_da.Build(trie);
@@ -37,10 +37,6 @@ void Benchmark(const plain_da::KeysetHandler& keyset, const plain_da::RawTrie& t
     }
   }
 
-  std::vector<std::string> bench_keyset(BenchKeyCounts);
-  for (int i = 0; i < BenchKeyCounts; i++) {
-    bench_keyset[i] = keyset[random()%keyset.size()];
-  }
   auto bench_for_random_keys = [&] {
     for (auto &key : bench_keyset) {
       bool ok = plain_da.contains(key);
@@ -58,7 +54,7 @@ void Benchmark(const plain_da::KeysetHandler& keyset, const plain_da::RawTrie& t
       bench_for_random_keys();
     }
   });
-  std::cout << "lookup_time: \t" << lookup_time/trie.size()/LoopTimes << " µs/key" << std::endl;
+  std::cout << "lookup_time: \t" << lookup_time/trie.size()/LoopTimes << " µs/key" << std::endl << std::endl;
 }
 
 }
@@ -76,15 +72,21 @@ int main(int argc, char* argv[]) {
   }
   plain_da::KeysetHandler keyset(ifs);
   plain_da::RawTrie trie(keyset);
+  plain_da::KeysetHandler bench_keyset;
+  for (int i = 0; i < BenchKeyCounts; i++)
+    bench_keyset.insert(keyset[random()%keyset.size()]);
+  bench_keyset.update_list();
 
-//  std::cout << "- Empty-Link method" << std::endl;
-//  Benchmark<plain_da::PlainDa<plain_da::da_construction_type_ELM, false>>(keyset, trie);
-  std::cout << "- Bit-parallelism" << std::endl;
-  Benchmark<plain_da::PlainDa<plain_da::da_construction_type_WW, false>>(keyset, trie);
-  std::cout << "- Bit-parallelism + EdgeOrdering" << std::endl;
-  Benchmark<plain_da::PlainDa<plain_da::da_construction_type_WW, true>>(keyset, trie);
-//  std::cout << "- Bit-parallelism + Empty-Link" << std::endl;
-//  Benchmark<plain_da::PlainDa<plain_da::da_construction_type_WW_ELM, false>>(keyset, trie);
+  std::cout << "- EmptyLink" << std::endl;
+  Benchmark<plain_da::PlainDa<plain_da::da_xor_operation_tag, plain_da::da_construction_type_ELM, false>>(keyset, trie, bench_keyset);
+  std::cout << "- EmptyLink + EdgeOrdering" << std::endl;
+  Benchmark<plain_da::PlainDa<plain_da::da_xor_operation_tag, plain_da::da_construction_type_ELM, true>>(keyset, trie, bench_keyset);
+  std::cout << "- BitParallelism" << std::endl;
+  Benchmark<plain_da::PlainDa<plain_da::da_xor_operation_tag, plain_da::da_construction_type_WW, false>>(keyset, trie, bench_keyset);
+  std::cout << "- BitParallelism + EdgeOrdering" << std::endl;
+  Benchmark<plain_da::PlainDa<plain_da::da_xor_operation_tag, plain_da::da_construction_type_WW, true>>(keyset, trie, bench_keyset);
+//  std::cout << "- BitParallelism + Empty-Link" << std::endl;
+//  Benchmark<plain_da::PlainDa<plain_da::da_construction_type_WW_ELM, false>>(keyset, trie, bench_keyset);
 
   return 0;
 }

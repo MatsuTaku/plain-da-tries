@@ -25,6 +25,9 @@ class BitVector : private std::vector<uint64_t> {
     size_ = new_size;
   }
 
+  const uint64_t* data() const { return _base::data(); }
+  uint64_t* data() { return _base::data(); }
+
   uint64_t word(size_t wi) const {
     return wi < _base::size() ? _base::operator[](wi) : 0ull;
   }
