@@ -54,7 +54,7 @@ void Benchmark(const plain_da::KeysetHandler& keyset, const plain_da::RawTrie& t
       bench_for_random_keys();
     }
   });
-  std::cout << "lookup_time: \t" << lookup_time/trie.size()/LoopTimes << " µs/key" << std::endl << std::endl;
+  std::cout << "lookup_time: \t" << lookup_time/BenchKeyCounts/LoopTimes << " µs/key" << std::endl << std::endl;
 }
 
 }
@@ -77,10 +77,10 @@ int main(int argc, char* argv[]) {
     bench_keyset.insert(keyset[random()%keyset.size()]);
   bench_keyset.update_list();
 
-  std::cout << "- EmptyLink" << std::endl;
-  Benchmark<plain_da::PlainDa<plain_da::da_xor_operation_tag, plain_da::da_construction_type_ELM, false>>(keyset, trie, bench_keyset);
-  std::cout << "- EmptyLink + EdgeOrdering" << std::endl;
-  Benchmark<plain_da::PlainDa<plain_da::da_xor_operation_tag, plain_da::da_construction_type_ELM, true>>(keyset, trie, bench_keyset);
+//  std::cout << "- EmptyLink" << std::endl;
+//  Benchmark<plain_da::PlainDa<plain_da::da_xor_operation_tag, plain_da::da_construction_type_ELM, false>>(keyset, trie, bench_keyset);
+//  std::cout << "- EmptyLink + EdgeOrdering" << std::endl;
+//  Benchmark<plain_da::PlainDa<plain_da::da_xor_operation_tag, plain_da::da_construction_type_ELM, true>>(keyset, trie, bench_keyset);
   std::cout << "- BitParallelism" << std::endl;
   Benchmark<plain_da::PlainDa<plain_da::da_xor_operation_tag, plain_da::da_construction_type_WW, false>>(keyset, trie, bench_keyset);
   std::cout << "- BitParallelism + EdgeOrdering" << std::endl;
