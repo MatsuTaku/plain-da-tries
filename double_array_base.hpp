@@ -4,16 +4,17 @@
 #include <cstdint>
 #include <vector>
 #include <array>
+#include <type_traits>
 
 #include <bo.hpp>
 
+#include "definition.hpp"
 #include "bit_vector.hpp"
 
 namespace plain_da {
 
 using index_type = int32_t;
 
-constexpr uint8_t kLeafChar = '\0';
 constexpr index_type kInvalidIndex = -1;
 
 
@@ -21,7 +22,7 @@ struct da_plus_operation_tag {};
 struct da_xor_operation_tag {};
 
 template<typename OperationTag>
-struct DaOperation{};
+struct DaOperation {};
 
 template<>
 struct DaOperation<da_plus_operation_tag> {
@@ -30,6 +31,9 @@ struct DaOperation<da_plus_operation_tag> {
   }
   index_type inv(index_type base, uint8_t c) const {
     return base - c;
+  }
+  uint8_t label(index_type from, index_type to) const {
+    return to - from;
   }
 };
 
@@ -40,6 +44,9 @@ struct DaOperation<da_xor_operation_tag> {
   }
   index_type inv(index_type base, uint8_t c) const {
     return base ^ c;
+  }
+  uint8_t label(index_type from, index_type to) const {
+    return to ^ from;
   }
 };
 
@@ -54,6 +61,11 @@ class DoubleArrayBase {
  public:
   using op_type = DaOperation<OperationTag>;
 
+  static constexpr bool kEnableBitVector = std::disjunction_v<
+      std::is_same<ConstructionType, da_construction_type_WW>,
+      std::is_same<ConstructionType, da_construction_type_WW_ELM>
+  >;
+
   struct DaUnit {
     index_type check = kInvalidIndex;
     index_type base = kInvalidIndex;
@@ -66,6 +78,11 @@ class DoubleArrayBase {
       base = -(nv+1);
     }
     bool Enabled() const { return check >= 0; }
+    bool HasBase() const { return base >= 0; }
+    index_type tail_i() const { return -base; }
+    void set_tail_i(index_type idx) {
+      base = -idx;
+    }
   };
 
  private:
@@ -78,6 +95,7 @@ class DoubleArrayBase {
   size_t size() const { return bc_.size(); }
   
   index_type Operate(index_type base, uint8_t c) const { return operation_(base, c); }
+  uint8_t RestoreLabel(index_type from, index_type to) const { return operation_.label(from, to); }
 
   const DaUnit& operator[](size_t i) const {
     return bc_[i];
@@ -123,9 +141,10 @@ void DoubleArrayBase<OperationTag, ConstructionType>::SetEnabled(index_type pos)
     empty_head_ = (succ_pos != pos) ? succ_pos : kInvalidIndex;
   }
   auto pred_pos = bc_[pos].pred();
+  bc_[pos].check = bc_[pos].base = kInvalidIndex;
   bc_[pred_pos].set_succ(succ_pos);
   bc_[succ_pos].set_pred(pred_pos);
-  if constexpr (!std::is_same_v<ConstructionType, da_construction_type_ELM>) {
+  if constexpr (kEnableBitVector) {
     exists_bits_[pos] = true;
   }
 }
@@ -137,7 +156,7 @@ void DoubleArrayBase<OperationTag, ConstructionType>::CheckExpand(index_type pos
   if (new_size <= old_size)
     return;
   bc_.resize(new_size);
-  if constexpr (!std::is_same_v<ConstructionType, da_construction_type_ELM>) {
+  if constexpr (kEnableBitVector) {
     exists_bits_.resize(new_size);
   }
   for (auto i = old_size; i < new_size; i++) {
@@ -153,39 +172,39 @@ index_type DoubleArrayBase<OperationTag, ConstructionType>::FindBase(const Conta
   uint8_t fstc = children[0];
 
   if (empty_head_ == kInvalidIndex)
-    return operation_.inv(size(), fstc);
-
-  if (children.size() == 1)
-    return operation_.inv(empty_head_, fstc);
+    return std::max(0, operation_.inv(size(), fstc));
 
   if constexpr (std::is_same_v<ConstructionType, da_construction_type_ELM>) {
 
-    index_type base_front = operation_.inv(empty_head_, fstc);
+    auto base_front = operation_.inv(empty_head_, fstc);
     auto base = base_front;
+
     while (operation_(base, fstc) < size()) {
-      bool ok = true;
+      bool ok = base >= 0;
       assert(!bc_[operation_(base, fstc)].Enabled());
-      for (int i = 1; i < children.size(); i++) {
+      for (int i = 1; ok and i < children.size(); i++) {
         uint8_t c = children[i];
         ok &= operation_(base, c) >= size() or !bc_[operation_(base, c)].Enabled();
-        if (!ok)
-          break;
       }
       if (ok) {
         return base;
       }
-      base = InvOperate(bc_[operation_(base, fstc)].succ(), fstc);
+      base = operation_.inv(bc_[operation_(base, fstc)].succ(), fstc);
       if (base == base_front)
         break;
       if (counter) (*counter)++;
     }
-    return InvOperate(size(), fstc);
+    return std::max(0, operation_.inv(size(), fstc));
 
   } else {
 
     if constexpr (std::is_same_v<OperationTag, da_plus_operation_tag>) {
 
-      for (int offset = empty_head_-fstc; offset+fstc < size(); ) {
+      int offset = empty_head_ - fstc;
+      if constexpr (std::is_same_v<ConstructionType, da_construction_type_WW>) {
+        offset = std::max(offset, 0);
+      }
+      for (; offset+fstc < size(); ) {
         uint64_t bits = 0ull;
         for (uint8_t c : children) {
           bits |= exists_bits_.bits64(offset + c);
@@ -193,8 +212,14 @@ index_type DoubleArrayBase<OperationTag, ConstructionType>::FindBase(const Conta
             break;
         }
         bits = ~bits;
-        if (bits != 0ull) {
-          return offset + bo::ctz_u64(bits);
+        auto vbits = bits;
+        if (offset <= -64) {
+          vbits = 0;
+        } else if (offset < 0) {
+          vbits &= (~0ull) << (-offset);
+        }
+        if (vbits != 0ull) {
+          return offset + bo::ctz_u64(vbits);
         }
 
         if constexpr (std::is_same_v<ConstructionType, da_construction_type_WW>) {
@@ -215,13 +240,13 @@ index_type DoubleArrayBase<OperationTag, ConstructionType>::FindBase(const Conta
           assert(!bc_[next_empty_pos].Enabled());
           if (next_empty_pos == empty_head_)
             break;
-          assert(next_empty_pos - window_front >= 64);
+          assert(next_empty_pos - window_front >= 64); // This is advantage over da_construction_type_WW
           offset = next_empty_pos - fstc;
 
         }
         if (counter) (*counter)++;
       }
-      return size() - fstc;
+      return std::max(0, (index_type) size() - fstc);
 
     } else if constexpr (std::is_same_v<OperationTag, da_xor_operation_tag>) {
 

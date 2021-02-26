@@ -5,6 +5,7 @@
 #include <chrono>
 
 #include "keyset.hpp"
+#include "double_array_base.hpp"
 
 namespace {
 
@@ -28,13 +29,16 @@ void Benchmark(const plain_da::KeysetHandler& keyset, const plain_da::RawTrie& t
   std::cout << "construction_time: \t" << construction_time/1000000 << " s" << std::endl;
 
   { // Check is construction perfect.
+    std::cout << "Test..." << std::endl;
     for (auto &key : keyset) {
       bool ok = plain_da.contains(key);
       if (!ok) {
+        std::cout << "NG" << std::endl;
         std::cout << "ERROR! " << key << "\t is not contained!" << std::endl;
         return;
       }
     }
+    std::cout << "OK" << std::endl;
   }
 
   auto bench_for_random_keys = [&] {
@@ -81,12 +85,36 @@ int main(int argc, char* argv[]) {
 //  Benchmark<plain_da::PlainDaTrie<plain_da::da_xor_operation_tag, plain_da::da_construction_type_ELM, false>>(keyset, trie, bench_keyset);
 //  std::cout << "- EmptyLink + EdgeOrdering" << std::endl;
 //  Benchmark<plain_da::PlainDaTrie<plain_da::da_xor_operation_tag, plain_da::da_construction_type_ELM, true>>(keyset, trie, bench_keyset);
-  std::cout << "- BitParallelism" << std::endl;
-  Benchmark<plain_da::PlainDaTrie<plain_da::da_xor_operation_tag, plain_da::da_construction_type_WW, false>>(keyset, trie, bench_keyset);
-  std::cout << "- BitParallelism + EdgeOrdering" << std::endl;
-  Benchmark<plain_da::PlainDaTrie<plain_da::da_xor_operation_tag, plain_da::da_construction_type_WW, true>>(keyset, trie, bench_keyset);
+//  std::cout << "- BitParallelism" << std::endl;
+//  Benchmark<plain_da::PlainDaTrie<plain_da::da_xor_operation_tag, plain_da::da_construction_type_WW, false>>(keyset, trie, bench_keyset);
+//  std::cout << "- BitParallelism + EdgeOrdering" << std::endl;
+//  Benchmark<plain_da::PlainDaTrie<plain_da::da_xor_operation_tag, plain_da::da_construction_type_WW, true>>(keyset, trie, bench_keyset);
 //  std::cout << "- BitParallelism + Empty-Link" << std::endl;
 //  Benchmark<plain_da::PlainDaTrie<plain_da::da_construction_type_WW_ELM, false>>(keyset, trie, bench_keyset);
+  std::cout << "- MP+ - EmptyLink" << std::endl;
+  Benchmark<plain_da::PlainDaMpTrie<
+      plain_da::DoubleArrayBase<
+          plain_da::da_plus_operation_tag,
+          plain_da::da_construction_type_ELM
+          >,
+      false
+      >>(keyset, trie, bench_keyset);
+//  std::cout << "- MP+ - BitParallelism" << std::endl;
+//  Benchmark<plain_da::PlainDaMpTrie<
+//      plain_da::DoubleArrayBase<
+//          plain_da::da_plus_operation_tag,
+//          plain_da::da_construction_type_WW
+//      >,
+//      false
+//  >>(keyset, trie, bench_keyset);
+  std::cout << "- MP+ - BitParallelism + Empty-Link" << std::endl;
+  Benchmark<plain_da::PlainDaMpTrie<
+      plain_da::DoubleArrayBase<
+          plain_da::da_plus_operation_tag,
+          plain_da::da_construction_type_WW_ELM
+          >,
+      false
+      >>(keyset, trie, bench_keyset);
 
   return 0;
 }
