@@ -90,6 +90,7 @@ class DoubleArrayBase {
   std::vector<DaUnit> bc_;
   BitVector exists_bits_;
   index_type empty_head_ = kInvalidIndex;
+  index_type empty_head_gt256_ = 256;
 
  public:
   size_t size() const { return bc_.size(); }
@@ -146,6 +147,11 @@ void DoubleArrayBase<OperationTag, ConstructionType>::SetEnabled(index_type pos)
   bc_[succ_pos].set_pred(pred_pos);
   if constexpr (kEnableBitVector) {
     exists_bits_[pos] = true;
+  }
+  if constexpr (std::is_same_v<ConstructionType, da_construction_type_WW>) {
+    while (empty_head_gt256_ < size() and bc_[empty_head_gt256_].Enabled()) {
+      ++empty_head_gt256_;
+    }
   }
 }
 
@@ -224,7 +230,11 @@ index_type DoubleArrayBase<OperationTag, ConstructionType>::FindBase(const Conta
 
         if constexpr (std::is_same_v<ConstructionType, da_construction_type_WW>) {
 
-          offset += 64;
+          if (offset + fstc >= 256 and empty_head_gt256_ - fstc - offset > 64) {
+            offset = empty_head_gt256_ - fstc;
+          } else {
+            offset += 64;
+          }
 
         } else if constexpr (std::is_same_v<ConstructionType, da_construction_type_WW_ELM>) {
 

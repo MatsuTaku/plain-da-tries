@@ -91,6 +91,7 @@ int main(int argc, char* argv[]) {
 //  Benchmark<plain_da::PlainDaTrie<plain_da::da_xor_operation_tag, plain_da::da_construction_type_WW, true>>(keyset, trie, bench_keyset);
 //  std::cout << "- BitParallelism + Empty-Link" << std::endl;
 //  Benchmark<plain_da::PlainDaTrie<plain_da::da_construction_type_WW_ELM, false>>(keyset, trie, bench_keyset);
+
   std::cout << "- MP+ - EmptyLink" << std::endl;
   Benchmark<plain_da::PlainDaMpTrie<
       plain_da::DoubleArrayBase<
@@ -99,14 +100,14 @@ int main(int argc, char* argv[]) {
           >,
       false
       >>(keyset, trie, bench_keyset);
-//  std::cout << "- MP+ - BitParallelism" << std::endl;
-//  Benchmark<plain_da::PlainDaMpTrie<
-//      plain_da::DoubleArrayBase<
-//          plain_da::da_plus_operation_tag,
-//          plain_da::da_construction_type_WW
-//      >,
-//      false
-//  >>(keyset, trie, bench_keyset);
+  std::cout << "- MP+ - BitParallelism" << std::endl;
+  Benchmark<plain_da::PlainDaMpTrie<
+      plain_da::DoubleArrayBase<
+          plain_da::da_plus_operation_tag,
+          plain_da::da_construction_type_WW
+      >,
+      false
+  >>(keyset, trie, bench_keyset);
   std::cout << "- MP+ - BitParallelism + Empty-Link" << std::endl;
   Benchmark<plain_da::PlainDaMpTrie<
       plain_da::DoubleArrayBase<
