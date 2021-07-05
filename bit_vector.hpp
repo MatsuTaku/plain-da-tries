@@ -91,6 +91,120 @@ class BitVector : private std::vector<uint64_t> {
     return const_reference(_base::data() + pos/64, 1ull<<(pos%64));
   }
 
+ private:
+  template<bool IsConst>
+  class _iterator {
+   public:
+    using reference = std::conditional_t<!IsConst, BitVector::reference, BitVector::const_reference>;
+    using pointer = std::conditional_t<!IsConst, uint64_t*, const uint64_t*>;
+    using value_type = reference;
+    using difference_type = long long;
+    using iterator_category = std::random_access_iterator_tag;
+   private:
+    pointer ptr_;
+    uint8_t ctz_;
+
+    friend class BitVector;
+    _iterator(pointer ptr, unsigned ctz) : ptr_(ptr), ctz_(ctz) {}
+
+   public:
+    reference operator*() const {
+      return reference(ptr_, 1ull << ctz_);
+    }
+
+    _iterator& operator++() {
+      if (ctz_ < 63)
+        ++ctz_;
+      else {
+        ++ptr_;
+        ctz_ = 0;
+      }
+      return *this;
+    }
+    _iterator operator++(int) {
+      _iterator ret = *this;
+      ++*this;
+      return ret;
+    }
+    _iterator& operator--() {
+      if (ctz_ > 0)
+        --ctz_;
+      else {
+        --ptr_;
+        ctz_ = 63;
+      }
+    }
+    _iterator operator--(int) {
+      _iterator ret = *this;
+      --*this;
+      return ret;
+    }
+    _iterator operator+(long long shifts) const {
+      long long i = ctz_ + shifts;
+      if (i >= 0) {
+        return _iterator(ptr_ + i / 64, i % 64);
+      } else {
+        return _iterator(ptr_ - (-i-1) / 64 + 1, (i % 64 + 64) % 64);
+      }
+    }
+    friend _iterator operator+(difference_type shifts, _iterator it) {
+      return it + shifts;
+    }
+    _iterator& operator+=(difference_type shifts) {
+      return *this = *this + shifts;
+    }
+    _iterator operator-(difference_type shifts) const {
+      return operator+(-shifts);
+    }
+    _iterator& operator-=(difference_type shifts) {
+      return *this = *this - shifts;
+    }
+    difference_type operator-(_iterator rhs) const {
+      return difference_type(ptr_ - rhs.ptr_) * 64 + ((difference_type) ctz_ - rhs.ctz_);
+    }
+    reference operator[](size_t i) const {
+      return *(*this + i);
+    }
+    bool operator<(_iterator rhs) const {
+      return ptr_ != rhs.ptr_ ? ptr_ < rhs.ptr_ : ctz_ < rhs.ctz_;
+    }
+    bool operator>(_iterator rhs) const {
+      return rhs < *this;
+    }
+    bool operator==(_iterator rhs) const {
+      return ptr_ == rhs.ptr_ and ctz_ == rhs.ctz_;
+    }
+    bool operator<=(_iterator rhs) const {
+      return ptr_ != rhs.ptr_ ? ptr_ < rhs.ptr_ : ctz_ <= rhs.ctz_;
+    }
+    bool operator>=(_iterator rhs) const {
+      return rhs <= *this;
+    }
+  };
+
+ public:
+  using iterator = _iterator<false>;
+  using const_iterator = _iterator<true>;
+
+  iterator begin() {
+    return iterator(_base::data(), 0);
+  }
+  const_iterator cbegin() const {
+    return const_iterator(_base::data(), 0);
+  }
+  const_iterator begin() const {
+    return cbegin();
+  }
+  iterator end() {
+    return iterator(_base::data() + (size()-1) / 64, (size() - 1) % 64);
+  }
+  const_iterator cend() const {
+    return const_iterator(_base::data() + (size()-1) / 64, (size() - 1) % 64);
+  }
+  const_iterator end() const {
+    return cend();
+  }
+
 };
 
 }

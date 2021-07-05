@@ -10,6 +10,7 @@
 
 #include "definition.hpp"
 #include "bit_vector.hpp"
+#include "convolution.hpp"
 
 namespace plain_da {
 
@@ -54,6 +55,8 @@ struct DaOperation<da_xor_operation_tag> {
 struct da_construction_type_ELM {};
 struct da_construction_type_WW {};
 struct da_construction_type_WW_ELM {};
+struct da_construction_type_CNV {};
+struct da_construction_type_CNV_ELM {};
 
 
 template <typename OperationTag, typename ConstructionType>
@@ -129,7 +132,7 @@ void DoubleArrayBase<OperationTag, ConstructionType>::SetDisabled(index_type pos
     bc_[pos].set_succ(empty_head_);
     bc_[pos].set_pred(back_pos);
   }
-  if constexpr (!std::is_same_v<ConstructionType, da_construction_type_ELM>) {
+  if constexpr (kEnableBitVector) {
     exists_bits_[pos] = false;
   }
 }
@@ -170,6 +173,7 @@ void DoubleArrayBase<OperationTag, ConstructionType>::CheckExpand(index_type pos
   }
 }
 
+
 template <typename OperationTag, typename ConstructionType>
 template <typename Container>
 index_type DoubleArrayBase<OperationTag, ConstructionType>::FindBase(const Container& children, size_t* counter) const {
@@ -202,7 +206,10 @@ index_type DoubleArrayBase<OperationTag, ConstructionType>::FindBase(const Conta
     }
     return std::max(0, operation_.inv(size(), fstc));
 
-  } else {
+  } else if (std::disjunction_v<
+      std::is_same<ConstructionType, da_construction_type_WW>,
+      std::is_same<ConstructionType, da_construction_type_WW_ELM>
+      >) {
 
     if constexpr (std::is_same_v<OperationTag, da_plus_operation_tag>) {
 
@@ -308,7 +315,71 @@ index_type DoubleArrayBase<OperationTag, ConstructionType>::FindBase(const Conta
 
     }
 
+  } else if (std::is_same_v<ConstructionType, da_construction_type_CNV>) {
+
+    if (std::is_same_v<OperationTag, da_plus_operation_tag>) {
+
+      static convolution::ModuloNTT fda[2][kAlphabetSize*2], fch[kAlphabetSize*2];
+
+      constexpr size_t n = kAlphabetSize*2;
+      {
+        size_t k = 0;
+        for (int i = 0; i < n; i++) {
+          if (k < children.size() and i == children[k]) {
+            fch[i] = 1;
+            k++;
+          } else {
+            fch[i] = 0;
+          }
+        }
+      }
+      convolution::ntt(fch, n);
+      constexpr size_t b = kAlphabetSize;
+      for (size_t f = (empty_head_gt256_ - fstc) / b * b; f < size(); f += b) {
+        for (int t = 0; t < 2; t++) {
+          fda[t][0] = (int) operator[](f + t * b + 0).Enabled();
+          for (int i = 1; i < n; i++) {
+            fda[t][n-i] = (int) operator[](f + i).Enabled();
+          }
+          convolution::index_sum_convolution_for_xcheck(fda[t], fch, n);
+        }
+        for (int i = 0; i < b; i++) {
+          auto col = i == 0 ? fda[0][i] : fda[0][i] + fda[1][n-i];
+          if (col.val() == 0) {
+            return f + i;
+          }
+        }
+      }
+      return size();
+
+    } else if (std::is_same_v<OperationTag, da_xor_operation_tag>) {
+
+      static index_type hda[kAlphabetSize], hch[kAlphabetSize];
+
+      constexpr size_t n = kAlphabetSize;
+      memset(hch, 0, sizeof(index_type) * n);
+      for (uint8_t c : children) hch[c] = 1;
+      convolution::fwt(hch, n);
+      for (size_t f = empty_head_ / n * n; f < size(); f += n) {
+        for (int i = 0; i < n; i++) {
+          hda[i] = (int) operator[](f + i).Enabled();
+        }
+        convolution::index_xor_convolution_for_xcheck(hda, hch, n);
+        for (int i = 0; i < n; i++) {
+          if (hda[i] == 0) {
+            return f + i;
+          }
+        }
+      }
+      return size();
+
+    } else if (std::is_same_v<ConstructionType, da_construction_type_CNV_ELM>) {
+
+    }
+
   }
+
+  throw std::bad_function_call();
 }
 
 }

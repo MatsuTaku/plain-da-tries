@@ -15,3 +15,13 @@ add_executable(bench benchmark.cpp)
 
 add_subdirectory(libbo EXCLUDE_FROM_ALL)
 target_link_libraries(bench PRIVATE libbo)
+
+enable_testing()
+
+add_executable(index_sum_convolution_test index_sum_convolution_test.cpp)
+target_link_libraries(index_sum_convolution_test libbo)
+add_test(NAME index_sum_convolution_test COMMAND index_sum_convolution_test)
+
+add_executable(index_xor_convolution_test index_xor_convolution_test.cpp)
+target_link_libraries(index_xor_convolution_test libbo)
+add_test(NAME index_xor_convolution_test COMMAND index_xor_convolution_test)

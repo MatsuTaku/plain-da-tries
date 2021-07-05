@@ -43,6 +43,7 @@ class KeysetHandler {
     sv_list_.reserve(pls_.size());
     for (auto [p, l] : pls_)
       sv_list_.emplace_back((const char*) storage_.data() + p, l);
+    pls_ = {};
   }
 
   size_t size() const { return sv_list_.size(); }
