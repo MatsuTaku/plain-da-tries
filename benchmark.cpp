@@ -81,63 +81,73 @@ int main(int argc, char* argv[]) {
     bench_keyset.insert(keyset[random()%keyset.size()]);
   bench_keyset.update_list();
 
-//  std::cout << "- EmptyLink" << std::endl;
-//  Benchmark<plain_da::PlainDaTrie<plain_da::da_xor_operation_tag, plain_da::da_construction_type_ELM, false>>(keyset, trie, bench_keyset);
-//  std::cout << "- EmptyLink + EdgeOrdering" << std::endl;
-//  Benchmark<plain_da::PlainDaTrie<plain_da::da_xor_operation_tag, plain_da::da_construction_type_ELM, true>>(keyset, trie, bench_keyset);
-//  std::cout << "- BitParallelism" << std::endl;
-//  Benchmark<plain_da::PlainDaTrie<plain_da::da_xor_operation_tag, plain_da::da_construction_type_WW, false>>(keyset, trie, bench_keyset);
-//  std::cout << "- BitParallelism + EdgeOrdering" << std::endl;
-//  Benchmark<plain_da::PlainDaTrie<plain_da::da_xor_operation_tag, plain_da::da_construction_type_WW, true>>(keyset, trie, bench_keyset);
-//  std::cout << "- BitParallelism + Empty-Link" << std::endl;
-//  Benchmark<plain_da::PlainDaTrie<plain_da::da_construction_type_WW_ELM, false>>(keyset, trie, bench_keyset);
+  // PLUS
 
-//  std::cout << "- MP+ - EmptyLink" << std::endl;
-//  Benchmark<plain_da::PlainDaMpTrie<
-//      plain_da::DoubleArrayBase<
-//          plain_da::da_plus_operation_tag,
-//          plain_da::da_construction_type_ELM
-//          >,
-//      false
-//      >>(keyset, trie, bench_keyset);
-//  std::cout << "- MP+ - BitParallelism" << std::endl;
-//  Benchmark<plain_da::PlainDaMpTrie<
-//      plain_da::DoubleArrayBase<
-//          plain_da::da_plus_operation_tag,
-//          plain_da::da_construction_type_WW
-//      >,
-//      false
-//  >>(keyset, trie, bench_keyset);
-//  std::cout << "- MP+ - BitParallelism + Empty-Link" << std::endl;
-//  Benchmark<plain_da::PlainDaMpTrie<
-//      plain_da::DoubleArrayBase<
-//          plain_da::da_plus_operation_tag,
-//          plain_da::da_construction_type_WW_ELM
-//          >,
-//      false
-//      >>(keyset, trie, bench_keyset);
+  std::cout << "- MP+ - EmptyLink" << std::endl;
+  Benchmark<plain_da::PlainDaMpTrie<
+      plain_da::DoubleArrayBase<
+          plain_da::da_plus_operation_tag,
+          plain_da::ELM_xcheck_tag
+          >,
+      false
+      >>(keyset, trie, bench_keyset);
+  std::cout << "- MP+ - BitParallelism" << std::endl;
+  Benchmark<plain_da::PlainDaMpTrie<
+      plain_da::DoubleArrayBase<
+          plain_da::da_plus_operation_tag,
+          plain_da::WW_xcheck_tag
+      >,
+      false
+  >>(keyset, trie, bench_keyset);
+  std::cout << "- MP+ - BitParallelism + Empty-Link" << std::endl;
+  Benchmark<plain_da::PlainDaMpTrie<
+      plain_da::DoubleArrayBase<
+          plain_da::da_plus_operation_tag,
+          plain_da::WW_ELM_xcheck_tag
+      >,
+      false
+  >>(keyset, trie, bench_keyset);
+  std::cout << "- MP+ - Convolution" << std::endl;
+  Benchmark<plain_da::PlainDaMpTrie<
+      plain_da::DoubleArrayBase<
+          plain_da::da_plus_operation_tag,
+          plain_da::CNV_xcheck_tag
+      >,
+      false
+  >>(keyset, trie, bench_keyset);
+  std::cout << "- MP+ - Convolution + Empty-Link" << std::endl;
+  Benchmark<plain_da::PlainDaMpTrie<
+      plain_da::DoubleArrayBase<
+          plain_da::da_plus_operation_tag,
+          plain_da::CNV_ELM_xcheck_tag
+      >,
+      false
+  >>(keyset, trie, bench_keyset);
 
-//  std::cout << "- MP+ - EmptyLink" << std::endl;
+
+  // XOR
+
+//  std::cout << "- MPx - EmptyLink" << std::endl;
 //  Benchmark<plain_da::PlainDaMpTrie<
 //      plain_da::DoubleArrayBase<
 //          plain_da::da_xor_operation_tag,
-//          plain_da::da_construction_type_ELM
+//          plain_da::ELM_xcheck_tag
 //      >,
 //      false
 //  >>(keyset, trie, bench_keyset);
-//  std::cout << "- MP+ - BitParallelism" << std::endl;
+//  std::cout << "- MPx - BitParallelism" << std::endl;
 //  Benchmark<plain_da::PlainDaMpTrie<
 //      plain_da::DoubleArrayBase<
 //          plain_da::da_xor_operation_tag,
-//          plain_da::da_construction_type_WW
+//          plain_da::WW_xcheck_tag
 //      >,
 //      false
 //  >>(keyset, trie, bench_keyset);
-//  std::cout << "- MP+ - BitParallelism + Empty-Link" << std::endl;
+//  std::cout << "- MPx - BitParallelism + Empty-Link" << std::endl;
 //  Benchmark<plain_da::PlainDaMpTrie<
 //      plain_da::DoubleArrayBase<
 //          plain_da::da_xor_operation_tag,
-//          plain_da::da_construction_type_WW_ELM
+//          plain_da::WW_ELM_xcheck_tag
 //      >,
 //      false
 //  >>(keyset, trie, bench_keyset);
@@ -146,7 +156,7 @@ int main(int argc, char* argv[]) {
 //  Benchmark<plain_da::PlainDaMpTrie<
 //      plain_da::DoubleArrayBase<
 //          plain_da::da_xor_operation_tag,
-//          plain_da::da_construction_type_WW
+//          plain_da::WW_xcheck_tag
 //      >,
 //      false
 //  >>(keyset, trie, bench_keyset);
@@ -154,26 +164,26 @@ int main(int argc, char* argv[]) {
 //  Benchmark<plain_da::PlainDaMpTrie<
 //      plain_da::DoubleArrayBase<
 //          plain_da::da_xor_operation_tag,
-//          plain_da::da_construction_type_WW_ELM
+//          plain_da::WW_ELM_xcheck_tag
 //      >,
 //      false
 //  >>(keyset, trie, bench_keyset);
-  std::cout << "- MP+ - Cnv" << std::endl;
-  Benchmark<plain_da::PlainDaMpTrie<
-      plain_da::DoubleArrayBase<
-          plain_da::da_plus_operation_tag,
-          plain_da::da_construction_type_CNV
-      >,
-      false
-  >>(keyset, trie, bench_keyset);
-  std::cout << "- MPx - Cnv" << std::endl;
-  Benchmark<plain_da::PlainDaMpTrie<
-      plain_da::DoubleArrayBase<
-          plain_da::da_xor_operation_tag,
-          plain_da::da_construction_type_CNV
-      >,
-      false
-  >>(keyset, trie, bench_keyset);
+//  std::cout << "- MPx - Convolution" << std::endl;
+//  Benchmark<plain_da::PlainDaMpTrie<
+//      plain_da::DoubleArrayBase<
+//          plain_da::da_xor_operation_tag,
+//          plain_da::CNV_xcheck_tag
+//      >,
+//      false
+//  >>(keyset, trie, bench_keyset);
+//  std::cout << "- MPx - Convolution + Empty-Link" << std::endl;
+//  Benchmark<plain_da::PlainDaMpTrie<
+//      plain_da::DoubleArrayBase<
+//          plain_da::da_xor_operation_tag,
+//          plain_da::CNV_ELM_xcheck_tag
+//      >,
+//      false
+//  >>(keyset, trie, bench_keyset);
 
   return 0;
 }

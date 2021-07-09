@@ -15,6 +15,7 @@
 #include <iterator>
 #include <numeric>
 #include <algorithm>
+#include <stdexcept>
 
 #include "double_array_base.hpp"
 #include "tail.hpp"
@@ -115,6 +116,10 @@ void PlainDaTrie<DaType, EdgeOrdering>::Build(const KeysetHandler& keyset) {
       CheckExpand(Operate(base, children.back()));
       for (uint8_t c : children) {
         auto pos = Operate(base, c);
+        assert(!bc_[pos].Enabled());
+        if (bc_[pos].Enabled()) {
+          throw std::logic_error("FindBase is not implemented correctly!");
+        }
         SetEnabled(pos);
         bc_[pos].check = da_index;
       }
@@ -158,6 +163,10 @@ void PlainDaTrie<DaType, EdgeOrdering>::Build(const RawTrie& trie) {
     bc_.CheckExpand(bc_.Operate(base, children.back()));
     for (uint8_t c : children) {
       auto pos = bc_.Operate(base, c);
+      assert(!bc_[pos].Enabled());
+      if (bc_[pos].Enabled()) {
+        throw std::logic_error("FindBase is not implemented correctly!");
+      }
       bc_.SetEnabled(pos);
       bc_[pos].check = da_index;
     }
@@ -281,8 +290,8 @@ class PlainDaMpTrie {
     for (; it != key.end(); ++it) {
       if (!bc_[idx].HasBase())
         break;
-      auto nxt = bc_.Operate(bc_[idx].base, *it);
-      if (nxt >= bc_.size() or bc_[nxt].check != idx) {
+      auto nxt = bc_.Operate(bc_[idx].base(), *it);
+      if (nxt >= bc_.size() or bc_[nxt].check() != idx) {
         return false;
       }
       idx = nxt;
@@ -290,8 +299,8 @@ class PlainDaMpTrie {
     if (bc_[idx].HasBase()) { // Check leaf transition
       if (it != key.end())
         return false;
-      auto nxt = bc_.Operate(bc_[idx].base, kLeafChar);
-      return nxt < bc_.size() and bc_[nxt].check == idx;
+      auto nxt = bc_.Operate(bc_[idx].base(), kLeafChar);
+      return nxt < bc_.size() and bc_[nxt].check() == idx;
     } else { // Compare on a TAIL
       size_t tail_i = bc_[idx].tail_i();
       for (; it != key.end(); ++it, ++tail_i) {
@@ -360,6 +369,10 @@ void PlainDaMpTrie<DaType, EdgeOrdering>::Build(const KeysetHandler& keyset) {
       CheckExpand(Operate(base, children.back()));
       for (uint8_t c : children) {
         auto pos = Operate(base, c);
+        assert(!bc_[pos].Enabled());
+        if (bc_[pos].Enabled()) {
+          throw std::logic_error("FindBase is not implemented correctly!");
+        }
         SetEnabled(pos);
         bc_[pos].check = da_index;
       }
@@ -436,17 +449,19 @@ void PlainDaMpTrie<DaType, EdgeOrdering>::Build(const RawTrie& trie) {
     assert(!children.empty());
     auto start_t = std::chrono::high_resolution_clock::now();
     auto base = bc_.FindBase(children, &cnt_skip);
-    assert(base >= 0);
     auto end_t = std::chrono::high_resolution_clock::now();
     time_fb += std::chrono::duration_cast<std::chrono::microseconds>(end_t-start_t).count();
 
-    bc_[da_index].base = base;
+    bc_[da_index].set_base(base);
     bc_.CheckExpand(bc_.Operate(base, children.back()));
     for (uint8_t c : children) {
       auto pos = bc_.Operate(base, c);
       assert(!bc_[pos].Enabled());
+      if (bc_[pos].Enabled()) {
+        throw std::logic_error("FindBase is not implemented correctly!");
+      }
       bc_.SetEnabled(pos);
-      bc_[pos].check = da_index;
+      bc_[pos].set_check(da_index);
     }
   };
 
@@ -498,20 +513,20 @@ void PlainDaMpTrie<DaType, EdgeOrdering>::Build(const RawTrie& trie) {
     }
     for (auto i : order) {
       assert(edges[i].next != -1);
-      dfs(dfs, trie[trie_node][i].next, bc_.Operate(bc_[da_index].base, children[i]));
+      dfs(dfs, trie[trie_node][i].next, bc_.Operate(bc_[da_index].base(), children[i]));
     }
   };
   const index_type root_index = 0;
   bc_.CheckExpand(root_index);
   bc_.SetEnabled(root_index);
-  bc_[root_index].check = std::numeric_limits<index_type>::max();
+  bc_[root_index].set_check(std::numeric_limits<index_type>::max());
   dfs(dfs, 0, root_index);
 
   tail_constr.Construct();
   for (size_t i = 0; i < bc_.size(); i++) {
     if (!bc_[i].Enabled() or bc_[i].HasBase())
       continue;
-    auto c = bc_.RestoreLabel(bc_[bc_[i].check].base, i);
+    auto c = bc_.RestoreLabel(bc_[bc_[i].check()].base(), i);
     if (c == kLeafChar)
       continue;
     auto tail_i = tail_constr.map_to(bc_[i].tail_i());

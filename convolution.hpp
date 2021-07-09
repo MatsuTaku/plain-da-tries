@@ -93,6 +93,7 @@ constexpr int kDivLim = 23;
 using ModuloNTT = Modulo<kModNTT>;
 constexpr ModuloNTT kPrimitiveRoot = 3;
 
+// Number Theoretic Transform
 template<bool INV>
 void _ntt(ModuloNTT f[], size_t n) {
   if (n == 1)
@@ -156,6 +157,7 @@ void index_sum_convolution_for_xcheck(ModuloNTT f[], ModuloNTT Tg[], size_t n) {
 
 // Index XOR(^) convolution
 
+// Fast Walsh-Hadamard Transform for XOR-Convolution
 template<typename T>
 void fwt(T f[], size_t n) {
   assert(bo::popcnt_u64(n) == 1);

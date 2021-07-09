@@ -11,17 +11,17 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-add_executable(bench benchmark.cpp)
-
 add_subdirectory(libbo EXCLUDE_FROM_ALL)
-target_link_libraries(bench PRIVATE libbo)
+
+add_executable(bench benchmark.cpp)
+target_link_libraries(bench libbo)
 
 enable_testing()
+file(GLOB TEST_SOURCES *_test.cpp)
+foreach(TEST_SOURCE ${TEST_SOURCES})
+    get_filename_component(TEST_SOURCE_NAME ${TEST_SOURCE} NAME_WE)
 
-add_executable(index_sum_convolution_test index_sum_convolution_test.cpp)
-target_link_libraries(index_sum_convolution_test libbo)
-add_test(NAME index_sum_convolution_test COMMAND index_sum_convolution_test)
-
-add_executable(index_xor_convolution_test index_xor_convolution_test.cpp)
-target_link_libraries(index_xor_convolution_test libbo)
-add_test(NAME index_xor_convolution_test COMMAND index_xor_convolution_test)
+    add_executable(${TEST_SOURCE_NAME} ${TEST_SOURCE})
+    target_link_libraries(${TEST_SOURCE_NAME} libbo)
+    add_test(NAME ${TEST_SOURCE_NAME} COMMAND ${TEST_SOURCE_NAME})
+endforeach()
